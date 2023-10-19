@@ -14,6 +14,8 @@ def get_video_duration(filename):
 def transcode_into_type(filename, resolution_format):
     output_directory = "transcoded_chunks"
     output_filename = filename.split("/")[1]
+    # Uncomment: To not chunk
+    # output_filename = filename
     output_file = '{}/{}'.format(output_directory, output_filename)
     os.makedirs(output_directory, exist_ok=True)
     vf = 'scale={}'.format(resolution_scale[resolution_format.name])
@@ -80,11 +82,16 @@ if __name__ == '__main__':
         except:
             print("Resolution does not exists. Using the default")
 
+    # check the file format
+
     splits = split('facebook.mp4')
     transcoded_chunks = transcode(splits, resolution_format)
     print(transcoded_chunks)
+    # combine
 
-    # transcode('facebook.mp4')
+    # Uncomment: To not chunk
+    # transcode(['facebook.mp4'], Resolution._360p)
+
 
 # Todo:
 # 1. should i split videos?
