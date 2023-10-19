@@ -35,7 +35,7 @@ class Transcoder(object):
                 if j >= len(filenames):
                     break
                 output_file, transcode_process  = self.__transcode_into_type(filenames[j], resolution_format)
-                # current_batch.append(transcode_process)
+                current_batch.append(transcode_process)
                 transcoded_files.append(output_file)
             
             for process in current_batch:
