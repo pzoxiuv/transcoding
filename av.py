@@ -5,7 +5,8 @@ from datetime import datetime
 from utils import get_video_duration
 
 class AudioVideo:
-    def concatenate(self, files):
+    @staticmethod
+    def concatenate(files):
         print('Starting to combine')
         start = datetime.now()
         
@@ -20,7 +21,6 @@ class AudioVideo:
                 audio_streams.append(input_stream.audio)
         
         audio_streams = []
-        print(audio_streams)
         concatenated_video = ffmpeg.concat(*video_streams, a=0, v=1)  # Use a=0 to avoid audio streams
 
         if audio_streams:
@@ -33,8 +33,11 @@ class AudioVideo:
 
         print('Completed combining in {}'.format(end-start))
 
+        return output_file
 
-    def split(self, filename):
+
+    @staticmethod
+    def split(filename):
         print('Starting to chunk')
 
         output_directory = "output_chunks"
