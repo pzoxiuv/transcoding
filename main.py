@@ -2,50 +2,38 @@ import ffmpeg
 import sys
 import os
 from datetime import datetime
+from time import sleep
 from constants import Resolution
-from config import resolution_scale
+from utils import get_video_duration
+from transcoder import Transcoder
 
-
-def get_video_duration(filename):
-    probe = ffmpeg.probe(filename, v='error', select_streams='v:0', show_entries='stream=duration')
-    return float(probe['streams'][0]['duration'])
-
-
-def transcode_into_type(filename, resolution_format):
-    output_directory = "transcoded_chunks"
-    output_filename = filename.split("/")[1]
-    # Uncomment: To not chunk
-    # output_filename = filename
-    output_file = '{}/{}'.format(output_directory, output_filename)
-    os.makedirs(output_directory, exist_ok=True)
-    vf = 'scale={}'.format(resolution_scale[resolution_format.name])
-    process = ffmpeg.input(filename).output(output_file, vcodec='libx264', acodec='aac', vf=vf).run_async(overwrite_output=True, quiet=True)
-    return output_file, process
-
-
-def transcode(filenames, resolution_format):
-    batch_size = 5
-    transcoded_files = []
+def concatenate(files):
+    print('Starting to combine')
     start = datetime.now()
+    
+    video_streams = []
+    audio_streams = []
+    output_file = 'output.mp4'
 
-    for i in range(0, len(filenames), batch_size):
-        print("Processing batch - {}".format(i//5 + 1))
-        current_batch = []
-        for j in range(i, i+batch_size):
-            if j >= len(filenames):
-                break
-            output_file, transcode_process  = transcode_into_type(filenames[j], resolution_format)
-            current_batch.append(transcode_process)
-            transcoded_files.append(output_file)
-        
-        for process in current_batch:
-            process.wait()
+    for file in files:
+        input_stream = ffmpeg.input(file)
+        video_streams.append(input_stream.video)
+        if input_stream.audio is not None:
+            audio_streams.append(input_stream.audio)
+    
+    audio_streams = []
+    print(audio_streams)
+    concatenated_video = ffmpeg.concat(*video_streams, a=0, v=1)  # Use a=0 to avoid audio streams
+
+    if audio_streams:
+        concatenated_audio = ffmpeg.concat(*audio_streams, v=0, a=1)
+        ffmpeg.output(concatenated_video, concatenated_audio, output_file).run(overwrite_output=True)
+    else:
+        ffmpeg.output(concatenated_video, output_file).run(overwrite_output=True)
 
     end = datetime.now()
 
-    print('Processed all batches in {}'.format(end-start))
-
-    return transcoded_files
+    print('Completed combining in {}'.format(end-start))
 
 
 def split(filename):
@@ -83,11 +71,12 @@ if __name__ == '__main__':
             print("Resolution does not exists. Using the default")
 
     # check the file format
-
     splits = split('facebook.mp4')
-    transcoded_chunks = transcode(splits, resolution_format)
-    print(transcoded_chunks)
-    # combine
+    # # transcoding and changing the container format
+    transcoded_chunks = Transcoder().transcode(splits, resolution_format)
+    # transcoded_chunks = ['transcoded_chunks/chunk_0.mp4', 'transcoded_chunks/chunk_5.mp4', 'transcoded_chunks/chunk_10.mp4', 'transcoded_chunks/chunk_15.mp4', 'transcoded_chunks/chunk_20.mp4', 'transcoded_chunks/chunk_25.mp4', 'transcoded_chunks/chunk_30.mp4', 'transcoded_chunks/chunk_35.mp4', 'transcoded_chunks/chunk_40.mp4', 'transcoded_chunks/chunk_45.mp4', 'transcoded_chunks/chunk_50.mp4', 'transcoded_chunks/chunk_55.mp4', 'transcoded_chunks/chunk_60.mp4', 'transcoded_chunks/chunk_65.mp4', 'transcoded_chunks/chunk_80.mp4', 'transcoded_chunks/chunk_85.mp4']
+    # sleep(10)
+    concatenate(transcoded_chunks)
 
     # Uncomment: To not chunk
     # transcode(['facebook.mp4'], Resolution._360p)
