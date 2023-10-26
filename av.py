@@ -46,6 +46,7 @@ class AudioVideo:
 
         chunk_size = 10
         duration = get_video_duration(filename)
+        print('Video duration is: {}'.format(duration))
         splits = []
         num_chunks = int(duration / chunk_size)
 
