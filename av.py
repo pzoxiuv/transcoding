@@ -29,7 +29,6 @@ class AudioVideo:
         concatenated_video = ffmpeg.concat(*video_streams, a=0, v=1)  # Use a=0 to avoid audio streams
 
         output_file = f"{PROCESSED_VIDEO_BUCKET}/output.mp4"
-        print(os.listdir('.'), output_file, os.listdir(f"{PROCESSED_VIDEO_BUCKET}"))
         # output_file = "output.mp4"
 
         if audio_streams:

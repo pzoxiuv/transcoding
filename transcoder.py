@@ -19,7 +19,7 @@ class Transcoder(object):
         
         output_file = f"{TRANSCODED_CHUNKS_NAME}/{filename}"
         vf = 'scale={}'.format(resolution_scale[resolution_format.name])
-        process = ffmpeg.input(input_file).output(output_file, vcodec='libx264', acodec='aac', vf=vf).run_async(overwrite_output=True, quiet=True)
+        process = ffmpeg.input(input_file).output(output_file, vcodec='libx264', acodec='aac', vf=vf).run(overwrite_output=True, quiet=True)
 
         return process
 
@@ -30,15 +30,14 @@ class Transcoder(object):
         for i in range(0, len(filenames), self.__batch_size):
             print("Processing batch - {}".format(i//5 + 1))
             current_batch = []
-            # for j in range(i, i+1):
             for j in range(i, i+self.__batch_size):
                 if j >= len(filenames):
                     break
                 transcode_process  = self.__transcode_into_type(filenames[j], resolution_format)
                 current_batch.append(transcode_process)
             
-            for process in current_batch:
-                process.wait()
+            # for process in current_batch:
+            #     process.wait()
 
             for j in range(i, i+self.__batch_size):
                 if j >= len(filenames):
