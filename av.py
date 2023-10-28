@@ -3,6 +3,8 @@ import ffmpeg
 
 from datetime import datetime
 from utils import get_video_duration
+from object_store import ObjectStore
+from constants import CHUNKS_BUCKET_NAME, TRANSCODED_CHUNKS_NAME, PROCESSED_VIDEO_BUCKET
 
 class AudioVideo:
     @staticmethod
@@ -12,16 +14,23 @@ class AudioVideo:
         
         video_streams = []
         audio_streams = []
-        output_file = 'output.mp4'
 
-        for file in files:
-            input_stream = ffmpeg.input(file)
+        store = ObjectStore()
+
+        for file_name in files:
+            input_file = f"{TRANSCODED_CHUNKS_NAME}/{file_name}"
+            store.get_sync(TRANSCODED_CHUNKS_NAME, file_name)
+            input_stream = ffmpeg.input(input_file)
             video_streams.append(input_stream.video)
             if input_stream.audio is not None:
                 audio_streams.append(input_stream.audio)
         
         audio_streams = []
         concatenated_video = ffmpeg.concat(*video_streams, a=0, v=1)  # Use a=0 to avoid audio streams
+
+        output_file = f"{PROCESSED_VIDEO_BUCKET}/output.mp4"
+        print(os.listdir('.'), output_file, os.listdir(f"{PROCESSED_VIDEO_BUCKET}"))
+        # output_file = "output.mp4"
 
         if audio_streams:
             concatenated_audio = ffmpeg.concat(*audio_streams, v=0, a=1)
@@ -31,6 +40,7 @@ class AudioVideo:
 
         end = datetime.now()
 
+        store.put_sync(PROCESSED_VIDEO_BUCKET, 'output.mp4')
         print('Completed combining in {}'.format(end-start))
 
         return output_file
@@ -39,11 +49,6 @@ class AudioVideo:
     @staticmethod
     def split(filename):
         print('Starting to chunk')
-
-        output_directory = "output_chunks"
-        os.makedirs(output_directory, exist_ok=True)
-        os.system('rm -rf {}/*'.format(output_directory))
-
         chunk_size = 10
         duration = get_video_duration(filename)
         print('Video duration is: {}'.format(duration))
@@ -51,11 +56,15 @@ class AudioVideo:
         num_chunks = int(duration / chunk_size)
 
         start = datetime.now()
-        
+        store = ObjectStore()
         for i in range(num_chunks):
-            output_file = f"{output_directory}/chunk_{i}.mp4"
+            output_file_name = f"chunk_{i}.mp4"
+            output_file = f"{CHUNKS_BUCKET_NAME}/{output_file_name}"
             ffmpeg.input(filename, ss=i * chunk_size, t=chunk_size).output(output_file, codec='copy').run(overwrite_output=True, quiet=True)
-            splits.append(output_file)
+            splits.append(output_file_name)
+            store.put_sync(CHUNKS_BUCKET_NAME, output_file_name)
+
+        print("Splits are: {}".format(splits))
         
         end = datetime.now()
 

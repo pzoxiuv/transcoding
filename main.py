@@ -1,16 +1,19 @@
 import sys
+import os
 from constants import Resolution
 from transcoder import Transcoder
 from av import AudioVideo
+from object_store import ObjectStore
 
 def transcode():
     splits = AudioVideo.split('facebook.mp4')
     # transcoding and changing the container format    
-    transcoded_chunks = Transcoder().transcode(splits, resolution_format)
-    AudioVideo.concatenate(transcoded_chunks)
+    Transcoder().transcode(splits, resolution_format)
+    AudioVideo.concatenate(splits)
 
 
 if __name__ == '__main__':
+    print('Started')
     args = sys.argv[1:]
     resolution_format = Resolution._360p
 
@@ -21,6 +24,7 @@ if __name__ == '__main__':
             print("Resolution does not exists. Using the default")
 
     print(resolution_format)
+    ObjectStore()
     transcode()
 
     # Uncomment: To not chunk
