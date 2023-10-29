@@ -1,3 +1,4 @@
 ffmpeg-python
-minio
+minio==7.1.8
 python-dotenv
+requests

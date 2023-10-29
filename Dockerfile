@@ -1,13 +1,7 @@
-FROM python:3
+FROM openwhisk/python3action:latest
 
-WORKDIR /code
-
-RUN apt-get update && apt-get install -y ffmpeg
+RUN apk update && apk add ffmpeg
 
 COPY requirements.txt requirements.txt
 
 RUN pip install -r requirements.txt
-
-COPY . /code
-
-CMD ["python", "main.py"]

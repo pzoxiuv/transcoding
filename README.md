@@ -21,3 +21,9 @@ codec - coder, decoder (software or hardware algorithm used to compress and deco
     --set persistence.enabled=true \
     --set persistence.size=10Gi \
     --set persistence.storageClass=standard
+
+11. wsk property get --auth
+
+12. curl -u 23bc46b1-71f6-4ed5-8c54-816aa4f8c502:123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP --insecure https://localhost:31001/api/v1/namespaces/whisk.system/packages
+
+13. wsk action create transcoder --docker docker.io/prajjawal05/transcoder:latest main.py --insecure
