@@ -3,7 +3,6 @@ import minio
 import ffmpeg
 
 from enum import Enum
-
 from datetime import datetime
 
 STORAGE_ENDPOINT="172.24.17.247:9000"
@@ -21,6 +20,8 @@ TRANSCODED_CHUNKS_NAME = 'transcoded-chunks'
 PROCESSED_VIDEO_BUCKET = 'processed-video'
 INPUT_VIDEO_BUCKET = 'input-video'
 
+def get_epoch():
+    return int(datetime.now().timestamp())
 
 resolution_scale = {
     Resolution._360p.name: '480:360',
@@ -88,7 +89,7 @@ class AudioVideo:
     def concatenate(files):
         print('Starting to combine')
         start = datetime.now()
-        
+        epoch = get_epoch()
         video_streams = []
         audio_streams = []
 
@@ -103,8 +104,8 @@ class AudioVideo:
         audio_streams = []
         concatenated_video = ffmpeg.concat(*video_streams, a=0, v=1)  # Use a=0 to avoid audio streams
 
-        output_file = f"{PROCESSED_VIDEO_BUCKET}/output.mp4"
-        # output_file = "output.mp4"
+        output_file_name = f"output_{epoch}.mp4"
+        output_file = f"{PROCESSED_VIDEO_BUCKET}/{output_file_name}"
 
         if audio_streams:
             concatenated_audio = ffmpeg.concat(*audio_streams, v=0, a=1)
@@ -114,7 +115,7 @@ class AudioVideo:
 
         end = datetime.now()
 
-        store.put_sync(PROCESSED_VIDEO_BUCKET, 'output.mp4')
+        store.put_sync(PROCESSED_VIDEO_BUCKET, output_file_name)
         print('Completed combining in {}'.format(end-start))
 
         return output_file
@@ -130,10 +131,11 @@ class AudioVideo:
         print('Video duration is: {}'.format(duration))
         splits = []
         num_chunks = int(duration / chunk_size)
+        epoch = get_epoch()
 
         start = datetime.now()
         for i in range(num_chunks):
-            output_file_name = f"chunk_{i}.mp4"
+            output_file_name = f"chunk_{i}_{epoch}.mp4"
             output_file = f"{CHUNKS_BUCKET_NAME}/{output_file_name}"
             ffmpeg.input(input_file, ss=i * chunk_size, t=chunk_size).output(output_file, codec='copy').run(overwrite_output=True, quiet=True)
             splits.append(output_file_name)
@@ -164,47 +166,58 @@ class Transcoder(object):
         return process
 
 
-    def transcode(self, filenames, resolution_format):
+    def transcode(self, input_file, resolution_format):
         start = datetime.now()
 
-        for i in range(0, len(filenames), self.__batch_size):
-            print("Processing batch - {}".format(i//5 + 1))
-            current_batch = []
-            for j in range(i, i+self.__batch_size):
-                if j >= len(filenames):
-                    break
-                transcode_process  = self.__transcode_into_type(filenames[j], resolution_format)
-                current_batch.append(transcode_process)
-            
-            # for process in current_batch:
-            #     process.wait()
-
-            for j in range(i, i+self.__batch_size):
-                if j >= len(filenames):
-                    break
-                store.put_sync(TRANSCODED_CHUNKS_NAME, filenames[j])
+        print("Processing input_file - {}".format(input_file))
+        self.__transcode_into_type(input_file, resolution_format)
+        store.put_sync(TRANSCODED_CHUNKS_NAME, input_file)
 
         end = datetime.now()
 
-        print('Processed all batches in {}'.format(end-start))
+        print('Transcoded input_file in {}'.format(end-start))
 
         return
 
 
-def transcode(resolution_format):
-    splits = AudioVideo.split('facebook.mp4')
-    # transcoding and changing the container format    
-    Transcoder().transcode(splits, resolution_format)
-    AudioVideo.concatenate(splits)
-
-
 def main(args):
-    print(args)
-    resolution_format = Resolution._360p
-    transcode(resolution_format)
+    if args["type"] == "chunk":
+        input_file = args["input"]
+        splits = AudioVideo.split(input_file)
+        return {
+            "status": 200,
+            "body": {
+                "splits": splits
+            }
+        }
+    
+    if args["type"] == "transcode":
+        input_file = args["input"]
+        resolution = Resolution(args["resolution"])
+        Transcoder().transcode(input_file, resolution)
+        return {
+            "status": 200,
+            "body": {
+                "output_file": input_file
+            }
+        }
+    
+    if args["type"] == "combine":
+        input_files = args["input"]
+        output_file = AudioVideo.concatenate(input_files)
+        return {
+            "status": 200,
+            "body": {
+                "output_file": output_file
+            }
+        }
+    
+    # resolution_format = Resolution._360p
+    # transcode(resolution_format)
 
     return {
-        "status": 200
+        "status": 400,
+        "reason": "type should be one of chunk, transcode, or combine"
     }
 
     # Uncomment: To not chunk
