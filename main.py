@@ -5,7 +5,7 @@ import ffmpeg
 from enum import Enum
 from datetime import datetime
 
-STORAGE_ENDPOINT = "172.24.17.247:9000"
+STORAGE_ENDPOINT = "172.24.20.59:9000"
 AWS_ACCESS_KEY_ID = "minioadmin"
 AWS_SECRET_ACCESS_KEY = "minioadmin"
 
