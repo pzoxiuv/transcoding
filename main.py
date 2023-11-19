@@ -4,7 +4,7 @@ from enum import Enum
 from datetime import datetime
 from object_store import store
 
-config = dict(STORAGE_ENDPOINT="172.24.20.59:9000",
+config = dict(STORAGE_ENDPOINT="172.24.22.88:9000",
               AWS_ACCESS_KEY_ID="minioadmin", AWS_SECRET_ACCESS_KEY="minioadmin")
 
 CHUNKS_BUCKET_NAME = 'output-chunks'

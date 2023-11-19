@@ -10,8 +10,8 @@ class BaseOrchestrator:
         self.auth = auth
         self.url = "https://localhost:31001/api/v1/namespaces"
 
-    def __extract_activation_ids(act_dict):
-        return list(map(lambda x: x['activationId'], act_dict))
+    def __extract_activation_ids(self, act_dict):
+        return act_dict['activationId']
 
     def __get_call(self, api_url):
         response = requests.get(api_url, auth=self.auth, verify=False)
@@ -59,7 +59,7 @@ class BaseOrchestrator:
         for action in actions:
             action_response = self.__post_call(
                 _get_url(action['name']), action['body'])
-            activation_ids.extend(
+            activation_ids.append(
                 self.__extract_activation_ids(action_response))
 
         results = self.__poller(activation_ids)
