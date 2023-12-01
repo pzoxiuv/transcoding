@@ -1,3 +1,4 @@
+import asyncio
 from BaseOrchestrator import BaseOrchestrator
 
 
@@ -9,7 +10,7 @@ orch = BaseOrchestrator(auth)
 action_name = 'transcoder'
 
 
-def main():
+async def main():
     num_chunks = 5
     transcoding_parallelisation = 2
 
@@ -20,27 +21,22 @@ def main():
         "input": "facebook.mp4"
     }
     split_action = orch.prepare_action(action_name, params)
-    split_results = orch.make_action([split_action])
+    split_results = await orch.make_action([split_action])
     chunks = split_results[0]['response']['result']['body']['splits']
 
     print(f"\n** Transcoding in batches of: {transcoding_parallelisation} **")
 
-    for i in range(0, len(chunks), transcoding_parallelisation):
-        transcoding_actions = []
+    transcoding_actions = []
+    for chunk in chunks:
+        params = {
+            "type": "transcode",
+            "input": chunk,
+            "resolution": "360p"
+        }
+        transcoding_actions.append(
+            orch.prepare_action(action_name, params))
 
-        for j in range(i, i+transcoding_parallelisation):
-            if j >= len(chunks):
-                break
-
-            params = {
-                "type": "transcode",
-                "input": chunks[j],
-                "resolution": "360p"
-            }
-            transcoding_actions.append(
-                orch.prepare_action(action_name, params))
-
-        orch.make_action(transcoding_actions)
+    await orch.make_action(transcoding_actions)
 
     print("\n** Combining **")
     params = {
@@ -48,7 +44,7 @@ def main():
         "input": chunks
     }
     combine_action = orch.prepare_action(action_name, params)
-    combine_results = orch.make_action([combine_action])
+    combine_results = await orch.make_action([combine_action])
 
     print("\n** Done **")
     print("Output available at: {}".format(
@@ -56,7 +52,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
     # poller(['22b0335cebae4d4fb0335cebaefd4fff'])
 
 
