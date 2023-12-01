@@ -1,14 +1,31 @@
 import requests
 import urllib3
 import asyncio
+import logging
+
+from datetime import datetime
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+
+def get_logger(name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+
+    fh = logging.FileHandler('logfile.log')
+    formatter = logging.Formatter('%(asctime)s %(levelname)-8s %(message)s')
+    fh.setFormatter(formatter)
+
+    logger.addHandler(fh)
+
+    return logger
 
 
 class BaseOrchestrator:
     def __init__(self, auth) -> None:
         self.auth = auth
         self.url = "https://localhost:31001/api/v1/namespaces"
+        self.logger = get_logger('transcoder')
 
     def __extract_activation_ids(self, act_dict):
         return act_dict['activationId']
@@ -41,7 +58,7 @@ class BaseOrchestrator:
         results = [None]*num_to_poll
 
         while num_polled < num_to_poll:
-            print("Polling for: {}".format(self._get_active_ids()))
+            self.logger.info("Polling for: {}".format(self._get_active_ids()))
             for index, act_id in enumerate(self.activation_ids):
                 if act_id is None:
                     continue
@@ -50,7 +67,9 @@ class BaseOrchestrator:
 
                 result = self.__get_call(url)
                 if result.get('end', None) is not None:
-                    print("Poll completed for: {}".format(act_id))
+                    time_taken = datetime.now() - self.start_times[act_id]
+                    self.logger.info(
+                        "Poll completed for: {} in: {}".format(act_id, time_taken))
                     results[index] = result
                     num_polled = num_polled+1
                     self.activation_ids[index] = None
@@ -60,6 +79,12 @@ class BaseOrchestrator:
         return results
 
     async def make_action(self, actions, parallelisation=2):
+        self.start_times = dict()
+        start = datetime.now()
+
+        self.logger.info('Invoking Action requested for {} with {} in parallel'.format(
+            len(actions), parallelisation))
+
         self.activation_ids = [None] * len(actions)
 
         poller_task = asyncio.create_task(self.__poller(len(actions)))
@@ -72,15 +97,20 @@ class BaseOrchestrator:
             action = actions[i]
             active_ids = self._get_active_ids()
             if len(active_ids) >= parallelisation:
-                print("[Debug]Will continue waiting")
                 await asyncio.sleep(0.5)
                 continue
             action_response = self.__post_call(
                 _get_url(action['name']), action['body'])
-            self.activation_ids[i] = self.__extract_activation_ids(
+            activation_id = self.__extract_activation_ids(
                 action_response)
+            self.activation_ids[i] = activation_id
+            self.start_times[activation_id] = datetime.now()
             i += 1
 
         await poller_task
         results = poller_task.result()
+
+        end = datetime.now()
+        self.logger.info(
+            'All the actions for this request completed in: {}'.format(end-start))
         return results
