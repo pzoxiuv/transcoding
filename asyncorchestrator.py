@@ -21,23 +21,30 @@ async def main():
         "input": "facebook.mp4"
     }
     split_action = orch.prepare_action(action_name, params)
-    split_results = await orch.make_action([split_action])
+    split_results = (await orch.make_persistent_action([split_action]))[0]
+    if not split_results['success']:
+        raise Exception('Error splitting in chunks')
 
-    chunks = split_results[0]['result']['splits']
+    chunks = split_results['result']['splits']
 
     print(f"** Transcoding in batches of: {transcoding_parallelisation} **")
 
     transcoding_actions = []
-    for chunk in chunks:
+    for i, chunk in enumerate(chunks):
         params = {
             "type": "transcode",
             "input": chunk,
             "resolution": "360p"
         }
+        # if i % 2 == 0:
+        #     params["type"] = "transcodes"
         transcoding_actions.append(
             orch.prepare_action(action_name, params))
 
-    await orch.make_action(transcoding_actions)
+    trans_results = await orch.make_persistent_action(transcoding_actions)
+    for res in trans_results:
+        if not res['success']:
+            raise Exception('Some transcoding Unsuccessful')
 
     print("** Combining **")
     params = {
@@ -45,11 +52,13 @@ async def main():
         "input": chunks
     }
     combine_action = orch.prepare_action(action_name, params)
-    combine_results = await orch.make_action([combine_action])
+    combine_results = (await orch.make_persistent_action([combine_action]))[0]
+    if not combine_results['success']:
+        raise Exception('Error combining transcoded chunks')
 
     print("** Done **")
     print("Output available at: {}".format(
-        combine_results[0]['result']['output_file']))
+        combine_results['result']['output_file']))
 
 
 if __name__ == "__main__":

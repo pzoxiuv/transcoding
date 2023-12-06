@@ -131,6 +131,35 @@ class BaseOrchestrator:
             'All the actions for this request completed in: {}'.format(end-start))
         return results
 
-    async def make_persistent_action(self, actions, parallelisation=2):
-        # while loop until all succceeds
-        pass
+    async def make_persistent_action(self, actions, retries=3, parallelisation=2):
+        count = 0
+        results = [{"success": False}] * len(actions)
+        curr_original_map = [i for i in range(len(actions))]
+        next_actions = [*actions]
+
+        while next_actions and count < retries:
+            curr_result = await self.make_action(next_actions, parallelisation)
+            next_iteration = []
+            for i, res in enumerate(curr_result):
+                if not res['success']:
+                    next_iteration.append(curr_original_map[i])
+                else:
+                    results[curr_original_map[i]] = res
+
+            curr_original_map = []
+            next_actions = []
+            for unsuccessful in next_iteration:
+                curr_original_map.append(unsuccessful)
+                next_actions.append(actions[unsuccessful])
+            if next_actions:
+                print("Exhausted: {} retries. Have {} actions left".format(
+                    count, len(next_actions)))
+            count = count + 1
+
+        if next_actions:
+            print("Retries exceeded, still have {} actions with error".format(
+                len(actions)))
+        else:
+            print("All actions completed successfully")
+
+        return results
