@@ -65,14 +65,30 @@ class BaseOrchestrator:
 
                 url = _get_url(activation_id=act_id)
 
-                result = self.__get_call(url)
-                if result.get('end', None) is not None:
-                    time_taken = datetime.now() - self.start_times[act_id]
+                responseData = self.__get_call(url)
+                if responseData.get('end', None) is None:
+                    continue
+
+                result = responseData.get('response').get('result')
+
+                time_taken = datetime.now() - self.start_times[act_id]
+                if result.get('error', None) is not None:
+                    self.logger.info(
+                        "Poll completed with error for: {} in: {}".format(act_id, time_taken))
+                    results[index] = {
+                        'success': False,
+                        'error': result.get('error')
+                    }
+                else:
                     self.logger.info(
                         "Poll completed for: {} in: {}".format(act_id, time_taken))
-                    results[index] = result
-                    num_polled = num_polled+1
-                    self.activation_ids[index] = None
+                    results[index] = {
+                        'success': True,
+                        'result': result
+                    }
+
+                num_polled = num_polled+1
+                self.activation_ids[index] = None
 
             await asyncio.sleep(1)
 
@@ -114,3 +130,7 @@ class BaseOrchestrator:
         self.logger.info(
             'All the actions for this request completed in: {}'.format(end-start))
         return results
+
+    async def make_persistent_action(self, actions, parallelisation=2):
+        # while loop until all succceeds
+        pass

@@ -14,7 +14,7 @@ async def main():
     num_chunks = 5
     transcoding_parallelisation = 2
 
-    print("\n** Chunking **")
+    print("** Chunking **")
     params = {
         "type": "chunk",
         "num_chunks": num_chunks,
@@ -22,9 +22,10 @@ async def main():
     }
     split_action = orch.prepare_action(action_name, params)
     split_results = await orch.make_action([split_action])
-    chunks = split_results[0]['response']['result']['body']['splits']
 
-    print(f"\n** Transcoding in batches of: {transcoding_parallelisation} **")
+    chunks = split_results[0]['result']['splits']
+
+    print(f"** Transcoding in batches of: {transcoding_parallelisation} **")
 
     transcoding_actions = []
     for chunk in chunks:
@@ -38,7 +39,7 @@ async def main():
 
     await orch.make_action(transcoding_actions)
 
-    print("\n** Combining **")
+    print("** Combining **")
     params = {
         "type": "combine",
         "input": chunks
@@ -46,9 +47,9 @@ async def main():
     combine_action = orch.prepare_action(action_name, params)
     combine_results = await orch.make_action([combine_action])
 
-    print("\n** Done **")
+    print("** Done **")
     print("Output available at: {}".format(
-        combine_results[0]['response']['result']['body']['output_file']))
+        combine_results[0]['result']['output_file']))
 
 
 if __name__ == "__main__":

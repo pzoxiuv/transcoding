@@ -4,7 +4,7 @@ from enum import Enum
 from datetime import datetime
 from object_store import store
 
-config = dict(STORAGE_ENDPOINT="172.24.22.88:9000",
+config = dict(STORAGE_ENDPOINT="172.24.23.93:9000",
               AWS_ACCESS_KEY_ID="minioadmin", AWS_SECRET_ACCESS_KEY="minioadmin")
 
 CHUNKS_BUCKET_NAME = 'output-chunks'
@@ -149,10 +149,7 @@ def main(args):
         num_chunks = int(args["num_chunks"])
         splits = AudioVideo.split(input_file, num_chunks)
         return {
-            "status": 200,
-            "body": {
-                "splits": splits
-            }
+            "splits": splits
         }
 
     if args["type"] == "transcode":
@@ -160,29 +157,20 @@ def main(args):
         resolution = Resolution(args["resolution"])
         Transcoder().transcode(input_file, resolution)
         return {
-            "status": 200,
-            "body": {
-                "output_file": input_file
-            }
+            "output_file": input_file
         }
 
     if args["type"] == "combine":
         input_files = args["input"]
         output_file = AudioVideo.concatenate(input_files)
         return {
-            "status": 200,
-            "body": {
-                "output_file": output_file
-            }
+            "output_file": output_file
         }
 
     # resolution_format = Resolution._360p
     # transcode(resolution_format)
 
-    return {
-        "status": 400,
-        "reason": "type should be one of chunk, transcode, or combine"
-    }
+    raise Exception('Some Error Occurred')
 
     # Uncomment: To not chunk
     # transcode(['facebook.mp4'], Resolution._360p)
