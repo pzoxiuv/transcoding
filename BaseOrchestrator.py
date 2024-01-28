@@ -3,9 +3,13 @@ import urllib3
 import asyncio
 import logging
 
+from uuid import uuid4
 from datetime import datetime
+from bson import Binary, UuidRepresentation
+from pymongo import MongoClient, collection
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+client = MongoClient('localhost', 27017)
 
 
 def get_logger(name):
@@ -26,6 +30,7 @@ class BaseOrchestrator:
         self.auth = auth
         self.url = "https://localhost:31001/api/v1/namespaces"
         self.logger = get_logger('transcoder')
+        self.db_collection: collection.Collection = client['openwhisk']['actions']
 
     def __extract_activation_ids(self, act_dict):
         return act_dict['activationId']
@@ -120,6 +125,16 @@ class BaseOrchestrator:
             activation_id = self.__extract_activation_ids(
                 action_response)
             self.activation_ids[i] = activation_id
+            action_id = Binary.from_uuid(uuid4(), UuidRepresentation.STANDARD)
+            self.db_collection.insert_one({
+                'action_id': action_id,
+                'action_name': action['name'],
+                'action_params': action['body'],
+                'creation_ts': datetime.now(),
+                'last_attempt_ts': datetime.now(),
+                'activation_id': [],
+                'num_retries': 0
+            })
             self.start_times[activation_id] = datetime.now()
             i += 1
 

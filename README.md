@@ -8,3 +8,7 @@ codec - coder, decoder (software or hardware algorithm used to compress and deco
 1. wsk property get --auth (use the output in BaseOrchestrator.py)
 2. wsk action create transcoder --docker docker.io/prajjawal05/transcoder:latest main.py --insecure
 3. run python3 asyncorchestrator.py
+
+On mac
+
+1. mongod --config /usr/local/etc/mongod.conf --fork
