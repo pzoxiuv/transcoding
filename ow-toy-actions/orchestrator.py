@@ -17,7 +17,7 @@ async def run_single_action(action_name, params):
         "input": params
     }
     action_request = orch.prepare_action(action_name, input)
-    action_output = (await orch.make_persistent_action([action_request]))[0]
+    action_output = (await orch.make_action([action_request]))[0]
     if not action_output['success']:
         raise Exception(f'Error running: {action_name_1}')
     return action_output['result']['response']

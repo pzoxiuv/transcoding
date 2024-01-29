@@ -3,9 +3,8 @@ import urllib3
 import asyncio
 import logging
 
-from uuid import uuid4
 from datetime import datetime
-from bson import Binary, UuidRepresentation
+from bson import ObjectId
 from pymongo import MongoClient, collection
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -64,11 +63,14 @@ class BaseOrchestrator:
 
         while num_polled < num_to_poll:
             self.logger.info("Polling for: {}".format(self._get_active_ids()))
-            for index, act_id in enumerate(self.activation_ids):
-                if act_id is None:
+            for index, act_id_object in enumerate(self.activation_ids):
+                if act_id_object is None:
                     continue
 
-                url = _get_url(activation_id=act_id)
+                action_id = act_id_object['action_id']
+                activation_id = act_id_object['activation_id']
+
+                url = _get_url(activation_id=activation_id)
 
                 responseData = self.__get_call(url)
                 if responseData.get('end', None) is None:
@@ -76,20 +78,22 @@ class BaseOrchestrator:
 
                 result = responseData.get('response').get('result')
 
-                time_taken = datetime.now() - self.start_times[act_id]
+                time_taken = datetime.now() - self.start_times[activation_id]
                 if result.get('error', None) is not None:
                     self.logger.info(
-                        "Poll completed with error for: {} in: {}".format(act_id, time_taken))
+                        "[{}] Poll completed with error for: {} in: {}".format(action_id, activation_id, time_taken))
                     results[index] = {
                         'success': False,
-                        'error': result.get('error')
+                        'error': result.get('error'),
+                        'action_id': action_id,
                     }
                 else:
                     self.logger.info(
-                        "Poll completed for: {} in: {}".format(act_id, time_taken))
+                        "[{}] Poll completed for: {} in: {}".format(action_id, activation_id, time_taken))
                     results[index] = {
                         'success': True,
-                        'result': result
+                        'result': result,
+                        'action_id': action_id,
                     }
 
                 num_polled = num_polled+1
@@ -99,7 +103,7 @@ class BaseOrchestrator:
 
         return results
 
-    async def make_action(self, actions, parallelisation=2):
+    async def __make_action(self, actions, parallelisation=2):
         self.start_times = dict()
         start = datetime.now()
 
@@ -124,18 +128,17 @@ class BaseOrchestrator:
                 _get_url(action['name']), action['body'])
             activation_id = self.__extract_activation_ids(
                 action_response)
-            self.activation_ids[i] = activation_id
-            action_id = Binary.from_uuid(uuid4(), UuidRepresentation.STANDARD)
-            self.db_collection.insert_one({
-                'action_id': action_id,
-                'action_name': action['name'],
-                'action_params': action['body'],
-                'creation_ts': datetime.now(),
-                'last_attempt_ts': datetime.now(),
-                'activation_id': [],
-                'num_retries': 0
-            })
-            self.start_times[activation_id] = datetime.now()
+            self.activation_ids[i] = {
+                'activation_id': activation_id, 'action_id': action['action_id']}
+            attempt_ts = datetime.now()
+            update_changes = {
+                '$set': {'last_attempt_ts': attempt_ts},
+                '$inc': {'num_attempts': 1},
+                '$push': {'activation_ids': activation_id}
+            }
+            self.db_collection.update_one(
+                {'_id': action['action_id']}, update_changes)
+            self.start_times[activation_id] = attempt_ts
             i += 1
 
         await poller_task
@@ -146,14 +149,36 @@ class BaseOrchestrator:
             'All the actions for this request completed in: {}'.format(end-start))
         return results
 
-    async def make_persistent_action(self, actions, retries=3, parallelisation=2):
-        count = 0
-        results = [{"success": False}] * len(actions)
-        curr_original_map = [i for i in range(len(actions))]
-        next_actions = [*actions]
+    async def make_action_with_id(self, action_ids, parallelisation):
+        actions_info = list(self.db_collection.find(
+            {'_id': {'$in': action_ids}}))
+        actions = [{
+            'action_id': info['_id'],
+            'name': info['action_name'],
+            'body': info['action_params']} for info in actions_info
+        ]
+        results = await self.__make_action(actions, parallelisation)
+        return results
 
+    async def make_action(self, actions, retries=3, parallelisation=2):
+        action_ids = self.db_collection.insert_many([{
+            'action_name': action['name'],
+            'action_params': action['body'],
+            'creation_ts': datetime.now(),
+            'num_attempts': 0,
+            'activation_ids': []
+        } for action in actions]).inserted_ids
+        for i, action in enumerate(actions):
+            action['action_id'] = action_ids[i]
+
+        results = [{"success": False, "action_id": id} for id in action_ids]
+
+        curr_original_map = [i for i in range(len(actions))]
+        next_actions = list(map(lambda action: action['action_id'], actions))
+
+        count = 0
         while next_actions and count < retries:
-            curr_result = await self.make_action(next_actions, parallelisation)
+            curr_result = await self.make_action_with_id(next_actions, parallelisation)
             next_iteration = []
             for i, res in enumerate(curr_result):
                 if not res['success']:
@@ -165,7 +190,7 @@ class BaseOrchestrator:
             next_actions = []
             for unsuccessful in next_iteration:
                 curr_original_map.append(unsuccessful)
-                next_actions.append(actions[unsuccessful])
+                next_actions.append(action_ids[unsuccessful])
             if next_actions:
                 print("Exhausted: {} retries. Have {} actions left".format(
                     count, len(next_actions)))
@@ -173,8 +198,21 @@ class BaseOrchestrator:
 
         if next_actions:
             print("Retries exceeded, still have {} actions with error".format(
-                len(actions)))
+                len(next_actions)))
         else:
             print("All actions completed successfully")
 
         return results
+
+
+async def main():
+    auth = ("23bc46b1-71f6-4ed5-8c54-816aa4f8c502",
+            "123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP")
+    orch = BaseOrchestrator(auth)
+    await orch.make_action_with_id([ObjectId('65b7c55447f9174830c07c6f')], 1)
+
+
+if __name__ == '__main__':
+    asyncio.run(main())
+
+# beautify the code
