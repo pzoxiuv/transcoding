@@ -124,6 +124,7 @@ class BaseOrchestrator:
             if len(active_ids) >= parallelisation:
                 await asyncio.sleep(0.5)
                 continue
+            print(f"Performing action for: {action}")
             action_response = self.__post_call(
                 _get_url(action['name']), action['body'])
             activation_id = self.__extract_activation_ids(
@@ -149,7 +150,7 @@ class BaseOrchestrator:
             'All the actions for this request completed in: {}'.format(end-start))
         return results
 
-    async def make_action_with_id(self, action_ids, parallelisation):
+    async def make_action_with_id(self, action_ids, retries=3, parallelisation=2):
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
         actions = [{
@@ -157,28 +158,14 @@ class BaseOrchestrator:
             'name': info['action_name'],
             'body': info['action_params']} for info in actions_info
         ]
-        results = await self.__make_action(actions, parallelisation)
-        return results
-
-    async def make_action(self, actions, retries=3, parallelisation=2):
-        action_ids = self.db_collection.insert_many([{
-            'action_name': action['name'],
-            'action_params': action['body'],
-            'creation_ts': datetime.now(),
-            'num_attempts': 0,
-            'activation_ids': []
-        } for action in actions]).inserted_ids
-        for i, action in enumerate(actions):
-            action['action_id'] = action_ids[i]
-
         results = [{"success": False, "action_id": id} for id in action_ids]
 
         curr_original_map = [i for i in range(len(actions))]
-        next_actions = list(map(lambda action: action['action_id'], actions))
+        next_actions = [*actions]
 
         count = 0
         while next_actions and count < retries:
-            curr_result = await self.make_action_with_id(next_actions, parallelisation)
+            curr_result = await self.__make_action(next_actions, parallelisation)
             next_iteration = []
             for i, res in enumerate(curr_result):
                 if not res['success']:
@@ -202,6 +189,18 @@ class BaseOrchestrator:
         else:
             print("All actions completed successfully")
 
+        return results
+
+    async def make_action(self, actions, retries=3, parallelisation=2):
+        action_ids = self.db_collection.insert_many([{
+            'action_name': action['name'],
+            'action_params': action['body'],
+            'creation_ts': datetime.now(),
+            'num_attempts': 0,
+            'activation_ids': []
+        } for action in actions]).inserted_ids
+
+        results = await self.make_action_with_id(action_ids, retries, parallelisation)
         return results
 
 
