@@ -38,10 +38,12 @@ class BaseOrchestrator:
         response = requests.get(api_url, auth=self.auth, verify=False)
         return response.json()
 
-    def __post_call(self, api_url, params):
+    def __post_call(self, api_url, action_id, params):
         headers = {"Content-Type": "application/json"}
+        context = {"action_id": str(action_id)}
         response = requests.post(
-            api_url, headers=headers, auth=self.auth, verify=False, json=params)
+            api_url, headers=headers, auth=self.auth, verify=False, json={**params, "context": context})
+
         return response.json()
 
     def _get_active_ids(self):
@@ -126,7 +128,7 @@ class BaseOrchestrator:
                 continue
             print(f"Performing action for: {action}")
             action_response = self.__post_call(
-                _get_url(action['name']), action['body'])
+                _get_url(action['name']), action['action_id'], action['body'])
             activation_id = self.__extract_activation_ids(
                 action_response)
             self.activation_ids[i] = {
@@ -177,7 +179,7 @@ class BaseOrchestrator:
             next_actions = []
             for unsuccessful in next_iteration:
                 curr_original_map.append(unsuccessful)
-                next_actions.append(action_ids[unsuccessful])
+                next_actions.append(actions[unsuccessful])
             if next_actions:
                 print("Exhausted: {} retries. Have {} actions left".format(
                     count, len(next_actions)))
