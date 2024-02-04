@@ -8,7 +8,7 @@ from bson import ObjectId
 from pymongo import MongoClient, collection
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-client = MongoClient('localhost', 27017)
+client = MongoClient('172.24.17.155', 27017)
 
 
 def get_logger(name):
@@ -79,7 +79,7 @@ class BaseOrchestrator:
                     continue
 
                 result = responseData.get('response').get('result')
-
+                print(result)
                 time_taken = datetime.now() - self.start_times[activation_id]
                 if result.get('error', None) is not None:
                     self.logger.info(
