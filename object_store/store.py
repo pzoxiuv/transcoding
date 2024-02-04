@@ -40,14 +40,18 @@ class ObjectStore:
     def get_copy_url(self, bucket, file_path):
         return self.client.get_presigned_url('GET', bucket, file_path)
 
-    def put_sync(self, bucket, file_name):
+    def put_sync(self, context, bucket, file_name):
         if not self.client:
             return
+        print("Context in store.py put_sync is: ", context)
         self.client.fput_object(bucket, file_name, f"{bucket}/{file_name}")
+    # receive the action_id
+    # map to arry of objects
 
-    def get_sync(self, bucket, file_name):
+    def get_sync(self, context, bucket, file_name):
         if not self.client:
             return
+        print("Context in store.py get_sync is: ", context)
         self.client.fget_object(bucket, file_name, f"{bucket}/{file_name}")
 
     def get_file_name(self, file_name):

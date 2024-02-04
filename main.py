@@ -4,7 +4,7 @@ from enum import Enum
 from datetime import datetime
 from object_store import store
 
-config = dict(STORAGE_ENDPOINT="172.24.23.93:9000",
+config = dict(STORAGE_ENDPOINT="172.24.17.155:9000",
               AWS_ACCESS_KEY_ID="minioadmin", AWS_SECRET_ACCESS_KEY="minioadmin")
 
 CHUNKS_BUCKET_NAME = 'output-chunks'
@@ -44,7 +44,7 @@ def get_video_duration(filename):
 
 class AudioVideo:
     @staticmethod
-    def concatenate(files):
+    def concatenate(context, files):
         print('Starting to combine')
         start = datetime.now()
         epoch = get_epoch()
@@ -53,7 +53,7 @@ class AudioVideo:
 
         for file_name in files:
             input_file = f"{TRANSCODED_CHUNKS_NAME}/{file_name}"
-            store.get_sync(TRANSCODED_CHUNKS_NAME, file_name)
+            store.get_sync(context, TRANSCODED_CHUNKS_NAME, file_name)
             input_stream = ffmpeg.input(input_file)
             video_streams.append(input_stream.video)
             if input_stream.audio is not None:
@@ -76,14 +76,14 @@ class AudioVideo:
 
         end = datetime.now()
 
-        store.put_sync(PROCESSED_VIDEO_BUCKET, output_file_name)
+        store.put_sync(context, PROCESSED_VIDEO_BUCKET, output_file_name)
         print('Completed combining in {}'.format(end-start))
 
         return output_file
 
     @staticmethod
-    def split(filename, num_chunks):
-        store.get_sync(INPUT_VIDEO_BUCKET, filename)
+    def split(context, filename, num_chunks):
+        store.get_sync(context, INPUT_VIDEO_BUCKET, filename)
         input_file = f"{INPUT_VIDEO_BUCKET}/{filename}"
         print('Starting to chunk')
         duration = get_video_duration(input_file)
@@ -101,7 +101,8 @@ class AudioVideo:
             ffmpeg.input(input_file, ss=i * chunk_size, t=chunk_size).output(
                 output_file, codec='copy').run(overwrite_output=True, quiet=True)
             splits.append(output_file_name)
-            store.put_sync(CHUNKS_BUCKET_NAME, output_file_name)
+            print("putting")
+            store.put_sync(context, CHUNKS_BUCKET_NAME, output_file_name)
 
         print("Splits are: {}".format(splits))
 
@@ -113,14 +114,12 @@ class AudioVideo:
 
 
 class Transcoder(object):
-    __batch_size = 5
-
     def __init__(self) -> None:
         pass
 
-    def __transcode_into_type(self, filename, resolution_format):
+    def __transcode_into_type(self, context, filename, resolution_format):
         input_file = f"{CHUNKS_BUCKET_NAME}/{filename}"
-        store.get_sync(CHUNKS_BUCKET_NAME, filename)
+        store.get_sync(context, CHUNKS_BUCKET_NAME, filename)
 
         output_file = f"{TRANSCODED_CHUNKS_NAME}/{filename}"
         vf = 'scale={}'.format(resolution_scale[resolution_format.name])
@@ -129,12 +128,12 @@ class Transcoder(object):
 
         return process
 
-    def transcode(self, input_file, resolution_format):
+    def transcode(self, context, input_file, resolution_format):
         start = datetime.now()
 
         print("Processing input_file - {}".format(input_file))
-        self.__transcode_into_type(input_file, resolution_format)
-        store.put_sync(TRANSCODED_CHUNKS_NAME, input_file)
+        self.__transcode_into_type(context, input_file, resolution_format)
+        store.put_sync(context, TRANSCODED_CHUNKS_NAME, input_file)
 
         end = datetime.now()
 
@@ -144,10 +143,12 @@ class Transcoder(object):
 
 
 def main(args):
+    context = args["context"]
+
     if args["type"] == "chunk":
         input_file = args["input"]
         num_chunks = int(args["num_chunks"])
-        splits = AudioVideo.split(input_file, num_chunks)
+        splits = AudioVideo.split(context, input_file, num_chunks)
         return {
             "splits": splits
         }
@@ -155,14 +156,14 @@ def main(args):
     if args["type"] == "transcode":
         input_file = args["input"]
         resolution = Resolution(args["resolution"])
-        Transcoder().transcode(input_file, resolution)
+        Transcoder().transcode(context, input_file, resolution)
         return {
             "output_file": input_file
         }
 
     if args["type"] == "combine":
         input_files = args["input"]
-        output_file = AudioVideo.concatenate(input_files)
+        output_file = AudioVideo.concatenate(context, input_files)
         return {
             "output_file": output_file
         }
