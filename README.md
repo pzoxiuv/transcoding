@@ -12,3 +12,8 @@ codec - coder, decoder (software or hardware algorithm used to compress and deco
 On mac
 
 1. mongod --config /usr/local/etc/mongod.conf --fork
+
+## Changes to object store
+
+1. docker build -t prajjawal05/transcoder .
+2. docker push prajjawal05/transcoder
