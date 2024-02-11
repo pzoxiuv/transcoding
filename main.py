@@ -142,40 +142,50 @@ class Transcoder(object):
         return
 
 
+class InvalidOperationException(Exception):
+    def __init__(self, msg) -> None:
+        super().__init__(msg)
+        self.code = 404
+        self.message = msg
+
+    def __str__(self) -> str:
+        return self.message
+
+
 def main(args):
     context = args["context"]
 
-    if args["type"] == "chunk":
-        input_file = args["input"]
-        num_chunks = int(args["num_chunks"])
-        splits = AudioVideo.split(context, input_file, num_chunks)
+    try:
+        if args["type"] == "chunk":
+            input_file = args["input"]
+            num_chunks = int(args["num_chunks"])
+            splits = AudioVideo.split(context, input_file, num_chunks)
+            return {
+                "splits": splits
+            }
+
+        if args["type"] == "transcode":
+            input_file = args["input"]
+            resolution = Resolution(args["resolution"])
+            Transcoder().transcode(context, input_file, resolution)
+            return {
+                "output_file": input_file
+            }
+
+        if args["type"] == "combine":
+            input_files = args["input"]
+            output_file = AudioVideo.concatenate(context, input_files)
+            return {
+                "output_file": output_file
+            }
+
+        raise InvalidOperationException(
+            f"Operation {args['type']} does not exists")
+
+    except Exception as e:
         return {
-            "splits": splits
+            "error": {
+                'code': e.code,
+                "message": str(e)
+            }
         }
-
-    if args["type"] == "transcode":
-        input_file = args["input"]
-        resolution = Resolution(args["resolution"])
-        Transcoder().transcode(context, input_file, resolution)
-        return {
-            "output_file": input_file
-        }
-
-    if args["type"] == "combine":
-        input_files = args["input"]
-        output_file = AudioVideo.concatenate(context, input_files)
-        return {
-            "output_file": output_file
-        }
-
-    # resolution_format = Resolution._360p
-    # transcode(resolution_format)
-
-    raise Exception('Some Error Occurred')
-
-    # Uncomment: To not chunk
-    # transcode(['facebook.mp4'], Resolution._360p)
-
-
-# Todo:
-# 1. Write down all the steps.
