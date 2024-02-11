@@ -3,6 +3,8 @@ import minio
 from pymongo import MongoClient, collection
 from bson import ObjectId
 
+from datetime import datetime
+
 client = MongoClient('172.24.17.155', 27017)
 
 
@@ -36,14 +38,27 @@ class ObjectStore:
                     if error.code == "BucketAlreadyOwnedByYou":
                         continue
                     raise error
+            print('Initialised Minio client')
         except Exception as e:
             print('Some issue with minio client: ' + e)
 
-    def __mark_object(self, context, object_path):
+    def __mark_object(self, context, object_path, method):
         action_id = ObjectId(context['action_id'])
         update_changes = {
             '$set': {**context},
-            '$push': {'objects': object_path}
+            '$push': {f"objects_{method}": object_path}
+        }
+        self.db_collection.update_one(
+            {'_id': action_id},
+            update_changes,
+            upsert=True
+        )
+
+    def __mark_error_get(self, context, object_path):
+        action_id = ObjectId(context['action_id'])
+        update_changes = {
+            '$set': {**context},
+            '$push': {'error_get': {'object': object_path, 'time': datetime.utcnow()}}
         }
         self.db_collection.update_one(
             {'_id': action_id},
@@ -61,14 +76,47 @@ class ObjectStore:
         if not self.client:
             return
         object_path = f"{bucket}/{file_name}"
-        self.__mark_object(context, object_path)
+        self.__mark_object(context, object_path, 'put')
         self.client.fput_object(bucket, file_name, object_path)
 
     def get_sync(self, context, bucket, file_name):
         if not self.client:
             return
-        print("Context in store.py get_sync is: ", context)
-        self.client.fget_object(bucket, file_name, f"{bucket}/{file_name}")
+        object_path = f"{bucket}/{file_name}"
+        try:
+            self.client.fget_object(bucket, file_name, object_path)
+            self.__mark_object(context, object_path, 'get')
+        except Exception as e:
+            self.__mark_error_get(context, object_path)
+            if e.code == 'NoSuchKey':
+                raise NoSuchKeyException(e)
+            raise e
 
     def get_file_name(self, file_name):
         return 's3://{}/{}'.format(self.endpoint, file_name) if self.endpoint else file_name
+
+
+class NoSuchKeyException(Exception):
+    def __init__(self, e):
+        super().__init__(e)
+        self.original_exception = e
+        self.code = getattr(e, 'code', None)
+
+    def __str__(self) -> str:
+        return str(self.original_exception)
+
+
+if __name__ == '__main__':
+    config = dict(STORAGE_ENDPOINT="172.24.20.28:9000",
+                  AWS_ACCESS_KEY_ID="minioadmin", AWS_SECRET_ACCESS_KEY="minioadmin")
+
+    CHUNKS_BUCKET_NAME = 'output-chunks'
+    TRANSCODED_CHUNKS_NAME = 'transcoded-chunks'
+    PROCESSED_VIDEO_BUCKET = 'processed-video'
+    INPUT_VIDEO_BUCKET = 'input-video'
+
+    store = ObjectStore(config, [
+        CHUNKS_BUCKET_NAME, TRANSCODED_CHUNKS_NAME, PROCESSED_VIDEO_BUCKET, INPUT_VIDEO_BUCKET])
+
+    store.get_sync({'action_id': '65bf234830192e6d4546c8fa'},
+                   PROCESSED_VIDEO_BUCKET, 'output_1707025224.mp4')
