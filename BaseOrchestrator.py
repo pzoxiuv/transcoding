@@ -5,7 +5,7 @@ import logging
 
 from datetime import datetime
 from bson import ObjectId
-from pymongo import MongoClient, collection
+from pymongo import MongoClient, collection, UpdateOne
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 client = MongoClient('172.24.17.155', 27017)
@@ -169,11 +169,27 @@ class BaseOrchestrator:
         while next_actions and count < retries:
             curr_result = await self.__make_action(next_actions, parallelisation)
             next_iteration = []
+            action_results = []
+
             for i, res in enumerate(curr_result):
                 if not res['success']:
                     next_iteration.append(curr_original_map[i])
+                    action_results.append({
+                        'error': res['error'],
+                        'success': False,
+                        'action_id': res['action_id']
+                    })
                 else:
                     results[curr_original_map[i]] = res
+                    action_results.append(
+                        {'error': None, 'success': True, 'action_id': res['action_id']})
+
+            update_operations = []
+            for item in action_results:
+                filter_criteria = {'_id': item['action_id']}
+                update_operations.append(
+                    UpdateOne(filter_criteria, {'$set': {'error': item['error']}}))
+            self.db_collection.bulk_write(update_operations)
 
             curr_original_map = []
             next_actions = []
