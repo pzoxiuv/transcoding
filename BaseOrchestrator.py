@@ -7,8 +7,10 @@ from datetime import datetime
 from bson import ObjectId
 from pymongo import MongoClient, collection, UpdateOne
 
+from object_store import store
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-client = MongoClient('172.24.17.155', 27017)
+client = MongoClient('172.24.20.28', 27017)
 
 
 def get_logger(name):
@@ -29,6 +31,7 @@ class BaseOrchestrator:
         self.auth = auth
         self.url = "https://localhost:31001/api/v1/namespaces"
         self.logger = get_logger('transcoder')
+        self.store = store.ObjectStore()
         self.db_collection: collection.Collection = client['openwhisk']['actions']
 
     def __extract_activation_ids(self, act_dict):
@@ -152,6 +155,40 @@ class BaseOrchestrator:
             'All the actions for this request completed in: {}'.format(end-start))
         return results
 
+    async def make_action_with_id_for_object_issues(self, action_key_map, retries=3, parallelisation=2):
+        parent_actions = self.store.get_action_ids_for_objects(
+            list(map(lambda mp: mp['key'], action_key_map)))
+        results = [None] * len(action_key_map)
+        action_parent_map = {}
+        action_index_map = {}
+        for i, action_key in enumerate(action_key_map):
+            action_id = action_key['action_id']
+            action_index_map[action_id] = i
+            action_parent_map[action_id] = parent_actions[i]
+        parent_results = self.make_action_with_id(
+            list(set(parent_actions)), retries, parallelisation)
+        parent_results_dict = {}
+        for result in parent_results:
+            parent_action_id = result['action_id']
+            parent_results_dict[parent_action_id] = result
+        retry_action_ids = []
+        for action_key in action_key_map:
+            action_id = action_key_map['action_id']
+            parent_action_id = action_parent_map[action_id]
+            parent_action_result = parent_results_dict[parent_action_id]
+            # retrying only for those actions whose objects might be created
+            if parent_action_result['success']:
+                retry_action_ids.append(action_id)
+
+        retry_results = self.make_action_with_id(
+            retry_action_ids, 0, parallelisation)
+        for result in retry_results:
+            action_id = result['action_id']
+            index = action_index_map[action_id]
+            results[index] = result
+
+        return results
+
     async def make_action_with_id(self, action_ids, retries=3, parallelisation=2):
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
@@ -170,19 +207,60 @@ class BaseOrchestrator:
             curr_result = await self.__make_action(next_actions, parallelisation)
             next_iteration = []
             action_results = []
+            object_issues = []
 
             for i, res in enumerate(curr_result):
+                original_index = curr_original_map[i]
                 if not res['success']:
-                    next_iteration.append(curr_original_map[i])
-                    action_results.append({
-                        'error': res['error'],
-                        'success': False,
-                        'action_id': res['action_id']
-                    })
+                    error = res['error']
+                    if error.get('code', 500) == 'NoSuchKey' and 'key' in error.get('meta', {}):
+                        # if no such key need to retry by adding it to object_issues list
+                        # not added to next iteration
+                        object_issues.append(
+                            {
+                                'index': original_index,
+                                'key': error['meta']['key']
+                            }
+                        )
+                        results[original_index] = res
+                    else:
+                        next_iteration.append(original_index)
+                        action_results.append({
+                            'error': error,
+                            'success': False,
+                            'action_id': res['action_id']
+                        })
                 else:
-                    results[curr_original_map[i]] = res
+                    results[original_index] = res
                     action_results.append(
                         {'error': None, 'success': True, 'action_id': res['action_id']})
+
+            # if object issues need to retry the parent action to create the object again
+            if object_issues:
+                object_issues_actions = [
+                    {
+                        'action_id': actions[object['index']]['action_id'],
+                        'key': object['key']
+                    } for object in object_issues
+                ]
+
+                object_issue_retry_result = self.make_action_with_id_for_object_issues(
+                    object_issues_actions, retries, parallelisation)
+                for i, res in enumerate(object_issue_retry_result):
+                    if not res:  # if issue from parent, does nothing
+                        continue
+                    if not res['success']:
+                        error = res['error']
+                        action_results.append({
+                            'error': error,
+                            'success': False,
+                            'action_id': res['action_id']
+                        })
+                    else:
+                        action_results.append(
+                            {'error': None, 'success': True, 'action_id': res['action_id']})
+
+                    results[object_issues[i]] = res
 
             update_operations = []
             for item in action_results:

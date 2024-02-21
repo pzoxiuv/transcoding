@@ -5,7 +5,7 @@ from bson import ObjectId
 
 from datetime import datetime
 
-client = MongoClient('172.24.17.155', 27017)
+client = MongoClient('172.24.20.28', 27017)
 
 
 class ObjectStore:
@@ -14,10 +14,10 @@ class ObjectStore:
     access_key = None
     secret_key = None
 
-    def __init__(self, config, buckets):
-        self.endpoint = config["STORAGE_ENDPOINT"]
-        self.access_key = config["AWS_ACCESS_KEY_ID"]
-        self.secret_key = config["AWS_SECRET_ACCESS_KEY"]
+    def __init__(self, config={}, buckets=[]):
+        self.endpoint = config.get("STORAGE_ENDPOINT")
+        self.access_key = config.get("AWS_ACCESS_KEY_ID")
+        self.secret_key = config.get("AWS_SECRET_ACCESS_KEY")
         self.db_collection: collection.Collection = client['openwhisk']['action_store']
 
         if not self.endpoint:
@@ -95,12 +95,24 @@ class ObjectStore:
     def get_file_name(self, file_name):
         return 's3://{}/{}'.format(self.endpoint, file_name) if self.endpoint else file_name
 
+    def get_action_ids_for_objects(self, keys):
+        objects = []
+        for key in keys:
+            result = self.db_collection.find_one({"objects_put": key})
+            if result:
+                objects.append(result)
+
+        return list(map(lambda action: action['action_id'], objects))
+
 
 class NoSuchKeyException(Exception):
     def __init__(self, e):
         super().__init__(e)
         self.original_exception = e
         self.code = getattr(e, 'code', None)
+        self.meta = {
+            'key': e._resource[1:]
+        }
 
     def __str__(self) -> str:
         return str(self.original_exception)
@@ -118,5 +130,10 @@ if __name__ == '__main__':
     store = ObjectStore(config, [
         CHUNKS_BUCKET_NAME, TRANSCODED_CHUNKS_NAME, PROCESSED_VIDEO_BUCKET, INPUT_VIDEO_BUCKET])
 
-    store.get_sync({'action_id': '65bf234830192e6d4546c8fa'},
-                   PROCESSED_VIDEO_BUCKET, 'output_1707025224.mp4')
+    # store.get_sync({'action_id': '65bf234830192e6d4546c8fa'},
+    #                PROCESSED_VIDEO_BUCKET, 'output_1707025224.mp4')
+
+    # store.get_sync({'action_id': '65bf234830192e6d4546c8fa'},
+    #    INPUT_VIDEO_BUCKET, 'output_1707025224.mp4')
+    store.get_action_ids_for_objects(['processed-video/output_1707762365.mp4',
+                                     'transcoded-chunks/chunk_1_1707762352.mp4', 'transcoded-chunks/chunk_1_1707762352.mp4'])
