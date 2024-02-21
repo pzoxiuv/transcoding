@@ -156,6 +156,7 @@ class BaseOrchestrator:
         return results
 
     async def make_action_with_id_for_object_issues(self, action_key_map, retries=3, parallelisation=2):
+        # finding parents
         parent_actions = self.store.get_action_ids_for_objects(
             list(map(lambda mp: mp['key'], action_key_map)))
         results = [None] * len(action_key_map)
@@ -165,7 +166,10 @@ class BaseOrchestrator:
             action_id = action_key['action_id']
             action_index_map[action_id] = i
             action_parent_map[action_id] = parent_actions[i]
-        parent_results = self.make_action_with_id(
+
+        # calling parents to create those objects
+        print("action_parent_map: ", action_parent_map)
+        parent_results = await self.make_action_with_id(
             list(set(parent_actions)), retries, parallelisation)
         parent_results_dict = {}
         for result in parent_results:
@@ -173,15 +177,16 @@ class BaseOrchestrator:
             parent_results_dict[parent_action_id] = result
         retry_action_ids = []
         for action_key in action_key_map:
-            action_id = action_key_map['action_id']
+            action_id = action_key['action_id']
             parent_action_id = action_parent_map[action_id]
             parent_action_result = parent_results_dict[parent_action_id]
             # retrying only for those actions whose objects might be created
             if parent_action_result['success']:
                 retry_action_ids.append(action_id)
 
-        retry_results = self.make_action_with_id(
-            retry_action_ids, 0, parallelisation)
+        # retrying actions for which parents were successful
+        retry_results = await self.make_action_with_id(
+            retry_action_ids, 0, parallelisation, False)
         for result in retry_results:
             action_id = result['action_id']
             index = action_index_map[action_id]
@@ -189,7 +194,7 @@ class BaseOrchestrator:
 
         return results
 
-    async def make_action_with_id(self, action_ids, retries=3, parallelisation=2):
+    async def make_action_with_id(self, action_ids, retries=3, parallelisation=2, retry_object_issues=True):
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
         actions = [{
@@ -203,33 +208,32 @@ class BaseOrchestrator:
         next_actions = [*actions]
 
         count = 0
-        while next_actions and count < retries:
+        while next_actions and count <= retries:
             curr_result = await self.__make_action(next_actions, parallelisation)
             next_iteration = []
-            action_results = []
+            action_results = []  # used for updating details in DB
             object_issues = []
 
             for i, res in enumerate(curr_result):
                 original_index = curr_original_map[i]
                 if not res['success']:
                     error = res['error']
-                    if error.get('code', 500) == 'NoSuchKey' and 'key' in error.get('meta', {}):
-                        # if no such key need to retry by adding it to object_issues list
-                        # not added to next iteration
+                    action_results.append({
+                        'error': error,
+                        'success': False,
+                        'action_id': res['action_id']
+                    })
+                    results[original_index] = res
+                    # if no such key need to retry in a different way by adding it to object_issues list
+                    if retry_object_issues and error.get('code', 500) == 'NoSuchKey' and 'key' in error.get('meta', {}):
                         object_issues.append(
                             {
                                 'index': original_index,
                                 'key': error['meta']['key']
                             }
                         )
-                        results[original_index] = res
                     else:
                         next_iteration.append(original_index)
-                        action_results.append({
-                            'error': error,
-                            'success': False,
-                            'action_id': res['action_id']
-                        })
                 else:
                     results[original_index] = res
                     action_results.append(
@@ -244,23 +248,29 @@ class BaseOrchestrator:
                     } for object in object_issues
                 ]
 
-                object_issue_retry_result = self.make_action_with_id_for_object_issues(
+                object_issue_retry_result = await self.make_action_with_id_for_object_issues(
                     object_issues_actions, retries, parallelisation)
                 for i, res in enumerate(object_issue_retry_result):
+                    action_id = res['action_id']
                     if not res:  # if issue from parent, does nothing
                         continue
                     if not res['success']:
-                        error = res['error']
-                        action_results.append({
-                            'error': error,
+                        action_result = {
+                            'error': res['error'],
                             'success': False,
-                            'action_id': res['action_id']
-                        })
+                            'action_id': action_id
+                        }
                     else:
-                        action_results.append(
-                            {'error': None, 'success': True, 'action_id': res['action_id']})
+                        action_result = {
+                            'error': None,
+                            'success': True,
+                            'action_id': action_id
+                        }
+                    for j, result in enumerate(action_results):
+                        if result['action_id'] == action_id:
+                            action_results[j] = action_result
 
-                    results[object_issues[i]] = res
+                    results[object_issues[i]['index']] = res
 
             update_operations = []
             for item in action_results:

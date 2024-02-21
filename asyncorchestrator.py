@@ -1,10 +1,22 @@
 import asyncio
+from object_store import store
 from BaseOrchestrator import BaseOrchestrator
 
 
 auth = ("23bc46b1-71f6-4ed5-8c54-816aa4f8c502",
         "123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP")
 orch = BaseOrchestrator(auth)
+
+config = dict(STORAGE_ENDPOINT="172.24.20.28:9000",
+              AWS_ACCESS_KEY_ID="minioadmin", AWS_SECRET_ACCESS_KEY="minioadmin")
+
+CHUNKS_BUCKET_NAME = 'output-chunks'
+TRANSCODED_CHUNKS_NAME = 'transcoded-chunks'
+PROCESSED_VIDEO_BUCKET = 'processed-video'
+INPUT_VIDEO_BUCKET = 'input-video'
+
+store = store.ObjectStore(config, [
+    CHUNKS_BUCKET_NAME, TRANSCODED_CHUNKS_NAME, PROCESSED_VIDEO_BUCKET, INPUT_VIDEO_BUCKET])
 
 
 action_name = 'transcoder'
@@ -27,6 +39,7 @@ async def main():
 
     chunks = split_results['result']['splits']
 
+    # store.remove_object({}, CHUNKS_BUCKET_NAME, chunks[2])
     print(f"** Transcoding in batches of: {transcoding_parallelisation} **")
 
     transcoding_actions = []
@@ -45,6 +58,8 @@ async def main():
     for res in trans_results:
         if not res['success']:
             raise Exception('Some transcoding Unsuccessful')
+
+    # store.remove_object({}, TRANSCODED_CHUNKS_NAME, chunks[0])
 
     print("** Combining **")
     params = {

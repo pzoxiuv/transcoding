@@ -92,6 +92,12 @@ class ObjectStore:
                 raise NoSuchKeyException(e)
             raise e
 
+    def remove_object(self, context, bucket, file_name):
+        if not self.client:
+            return
+        # object_path = f"{bucket}/{file_name}"
+        self.client.remove_object(bucket, file_name)
+
     def get_file_name(self, file_name):
         return 's3://{}/{}'.format(self.endpoint, file_name) if self.endpoint else file_name
 
@@ -102,7 +108,7 @@ class ObjectStore:
             if result:
                 objects.append(result)
 
-        return list(map(lambda action: action['action_id'], objects))
+        return list(map(lambda action: ObjectId(action['action_id']), objects))
 
 
 class NoSuchKeyException(Exception):
