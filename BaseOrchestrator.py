@@ -12,6 +12,8 @@ from object_store import store
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 client = MongoClient('172.24.20.28', 27017)
 
+# multiple actions that put into object.
+
 
 def get_logger(name):
     logger = logging.getLogger(name)
@@ -155,7 +157,7 @@ class BaseOrchestrator:
             'All the actions for this request completed in: {}'.format(end-start))
         return results
 
-    async def make_action_with_id_for_object_issues(self, action_key_map, retries=3, parallelisation=2):
+    async def make_action_with_id_for_object_issues(self, action_key_map, retries=3, parallelisation=2, ignore_objects_error=[]):
         # finding parents
         parent_actions = self.store.get_action_ids_for_objects(
             list(map(lambda mp: mp['key'], action_key_map)))
@@ -170,7 +172,7 @@ class BaseOrchestrator:
         # calling parents to create those objects
         print("action_parent_map: ", action_parent_map)
         parent_results = await self.make_action_with_id(
-            list(set(parent_actions)), retries, parallelisation)
+            list(set(parent_actions)), retries, parallelisation, ignore_objects_error)
         parent_results_dict = {}
         for result in parent_results:
             parent_action_id = result['action_id']
@@ -186,7 +188,7 @@ class BaseOrchestrator:
 
         # retrying actions for which parents were successful
         retry_results = await self.make_action_with_id(
-            retry_action_ids, 0, parallelisation, False)
+            retry_action_ids, 0, parallelisation, ignore_objects_error)
         for result in retry_results:
             action_id = result['action_id']
             index = action_index_map[action_id]
@@ -194,7 +196,7 @@ class BaseOrchestrator:
 
         return results
 
-    async def make_action_with_id(self, action_ids, retries=3, parallelisation=2, retry_object_issues=True):
+    async def make_action_with_id(self, action_ids, retries=3, parallelisation=2, ignore_objects_error=[]):
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
         actions = [{
@@ -225,7 +227,9 @@ class BaseOrchestrator:
                     })
                     results[original_index] = res
                     # if no such key need to retry in a different way by adding it to object_issues list
-                    if retry_object_issues and error.get('code', 500) == 'NoSuchKey' and 'key' in error.get('meta', {}):
+                    if error.get('code', 500) == 'NoSuchKey' and 'key' in error.get('meta', {}) and error['meta']['key'] not in ignore_objects_error:
+                        # ignore the error for the next time
+                        ignore_objects_error.append(error['meta']['key'])
                         object_issues.append(
                             {
                                 'index': original_index,
@@ -249,7 +253,7 @@ class BaseOrchestrator:
                 ]
 
                 object_issue_retry_result = await self.make_action_with_id_for_object_issues(
-                    object_issues_actions, retries, parallelisation)
+                    object_issues_actions, retries, parallelisation, ignore_objects_error)
                 for i, res in enumerate(object_issue_retry_result):
                     action_id = res['action_id']
                     if not res:  # if issue from parent, does nothing
