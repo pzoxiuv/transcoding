@@ -46,7 +46,7 @@ class ObjectStore:
         action_id = ObjectId(context['action_id'])
         update_changes = {
             '$set': {**context},
-            '$push': {f"objects_{method}": object_path}
+            '$push': {f"objects_{method}": {'object': object_path, 'time': datetime.utcnow()}}
         }
         self.db_collection.update_one(
             {'_id': action_id},
@@ -104,11 +104,31 @@ class ObjectStore:
     def get_action_ids_for_objects(self, keys):
         objects = []
         for key in keys:
-            result = self.db_collection.find_one({"objects_put": key})
+            result = self.db_collection.find_one({"objects_put.object": key})
             if result:
                 objects.append(result)
 
         return list(map(lambda action: ObjectId(action['action_id']), objects))
+
+    def get_all_action_ids_for_objects(self, keys):
+        objects = []
+        for key in keys:
+            object_for_key = []
+            result = self.db_collection.find({"objects_put.object": key})
+            # result = list(self.db_collection.find({"error_get": "*"}))
+            for res in result:
+                curr = {}
+                for obj in res['objects_put']:
+                    if obj['object'] == key:
+                        curr = {'action_id': res['action_id'], **obj}
+                if curr:
+                    object_for_key.append(curr)
+            object_for_key = sorted(object_for_key, key=lambda x: x['time'])
+            if object_for_key:
+                objects.append(
+                    list(map(lambda action: ObjectId(action['action_id']), object_for_key)))
+
+        return objects
 
 
 class NoSuchKeyException(Exception):
@@ -141,5 +161,6 @@ if __name__ == '__main__':
 
     # store.get_sync({'action_id': '65bf234830192e6d4546c8fa'},
     #    INPUT_VIDEO_BUCKET, 'output_1707025224.mp4')
-    store.get_action_ids_for_objects(['processed-video/output_1707762365.mp4',
-                                     'transcoded-chunks/chunk_1_1707762352.mp4', 'transcoded-chunks/chunk_1_1707762352.mp4'])
+    print(store.get_all_action_ids_for_objects(
+        ['output-chunks/chunk_4_1708821475.mp4']))
+    # store.get_action_ids_for_objects(['input-video/facebook.mp4'])
