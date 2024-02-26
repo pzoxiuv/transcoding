@@ -217,7 +217,7 @@ class BaseOrchestrator:
                         execute_child = False
                         break
                 else:  # if executing this parent for the first time
-                    action_result = await self.make_action_with_id(list(parent_action_id), retries, parallelisation, ignore_objects_error)
+                    action_result = await self.make_action_with_id([parent_action_id], retries, parallelisation, ignore_objects_error)
                     action_success = action_result[0]['success']
                     parent_action_result_map[parent_action_id] = action_success
                     if not action_success:
@@ -302,7 +302,7 @@ class BaseOrchestrator:
                     } for object in object_issues
                 ]
 
-                object_issue_retry_result = await self.make_action_with_id_for_object_issues(
+                object_issue_retry_result = await self.make_action_with_id_for_multiparent_object_issues(
                     object_issues_actions, retries, parallelisation, ignore_objects_error)
                 for i, res in enumerate(object_issue_retry_result):
                     action_id = res['action_id']
