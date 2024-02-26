@@ -196,6 +196,56 @@ class BaseOrchestrator:
 
         return results
 
+    async def make_action_with_id_for_multiparent_object_issues(self, action_key_map, retries=3, parallelisation=2, ignore_objects_error=[]):
+        # finding parents
+        parent_actions = self.store.get_all_action_ids_for_objects(
+            list(map(lambda mp: mp['key'], action_key_map)))
+
+        parent_action_result_map = {}
+        retry_action_ids = []
+
+        # executing it one by one because inside a list item, all the action_ids are in order
+        # would become too complicated if parallelism across different list items is tried
+        for i, parent_action_list in enumerate(parent_actions):
+            execute_child = True
+
+            for parent_action_id in parent_action_list:
+                if parent_action_id in parent_action_result_map:  # already executed befre
+                    if parent_action_result_map[parent_action_id]:
+                        continue
+                    else:
+                        execute_child = False
+                        break
+                else:  # if executing this parent for the first time
+                    action_result = await self.make_action_with_id(list(parent_action_id), retries, parallelisation, ignore_objects_error)
+                    action_success = action_result[0]['success']
+                    parent_action_result_map[parent_action_id] = action_success
+                    if not action_success:
+                        execute_child = False
+                        break
+
+            if execute_child:
+                retry_action_ids.append(action_key_map[i]['action_id'])
+
+        results = [None] * len(action_key_map)
+        # retrying actions for which parents were successful
+
+        # we can use the hashing by parent_action_result_map here - however not useful,
+        # because in parent that implies it should not have been failed section as it has run once already
+        retry_results = await self.make_action_with_id(
+            retry_action_ids, 0, parallelisation, ignore_objects_error)
+
+        action_index_map = {}
+        for i, action_key in enumerate(action_key_map):
+            action_id = action_key['action_id']
+            action_index_map[action_id] = i
+
+        for result in retry_results:
+            index = action_index_map[result['action_id']]
+            results[index] = result
+
+        return results
+
     async def make_action_with_id(self, action_ids, retries=3, parallelisation=2, ignore_objects_error=[]):
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
