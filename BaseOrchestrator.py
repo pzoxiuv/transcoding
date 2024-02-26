@@ -12,7 +12,8 @@ from object_store import store
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 client = MongoClient('172.24.20.28', 27017)
 
-# multiple actions that put into object.
+# if a key gives error again, just do not retry
+# multiple actions that put into object. - two different functions store.py and orchestrator.py
 
 
 def get_logger(name):
@@ -172,7 +173,7 @@ class BaseOrchestrator:
         # calling parents to create those objects
         print("action_parent_map: ", action_parent_map)
         parent_results = await self.make_action_with_id(
-            list(set(parent_actions)), retries, parallelisation, ignore_objects_error)
+            list(set(parent_actions)), retries, parallelisation, ignore_objects_error, object_ownership=True)
         parent_results_dict = {}
         for result in parent_results:
             parent_action_id = result['action_id']
@@ -188,7 +189,7 @@ class BaseOrchestrator:
 
         # retrying actions for which parents were successful
         retry_results = await self.make_action_with_id(
-            retry_action_ids, 0, parallelisation, ignore_objects_error)
+            retry_action_ids, 0, parallelisation, ignore_objects_error, object_ownership=True)
         for result in retry_results:
             action_id = result['action_id']
             index = action_index_map[action_id]
@@ -217,7 +218,7 @@ class BaseOrchestrator:
                         execute_child = False
                         break
                 else:  # if executing this parent for the first time
-                    action_result = await self.make_action_with_id([parent_action_id], retries, parallelisation, ignore_objects_error)
+                    action_result = await self.make_action_with_id([parent_action_id], retries, parallelisation, ignore_objects_error, object_ownership=False)
                     action_success = action_result[0]['success']
                     parent_action_result_map[parent_action_id] = action_success
                     if not action_success:
@@ -233,7 +234,7 @@ class BaseOrchestrator:
         # we can use the hashing by parent_action_result_map here - however not useful,
         # because in parent that implies it should not have been failed section as it has run once already
         retry_results = await self.make_action_with_id(
-            retry_action_ids, 0, parallelisation, ignore_objects_error)
+            retry_action_ids, 0, parallelisation, ignore_objects_error, object_ownership=False)
 
         action_index_map = {}
         for i, action_key in enumerate(action_key_map):
@@ -246,7 +247,7 @@ class BaseOrchestrator:
 
         return results
 
-    async def make_action_with_id(self, action_ids, retries=3, parallelisation=2, ignore_objects_error=[]):
+    async def make_action_with_id(self, action_ids, retries=3, parallelisation=2, ignore_objects_error=[], object_ownership=True):
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
         actions = [{
@@ -302,7 +303,10 @@ class BaseOrchestrator:
                     } for object in object_issues
                 ]
 
-                object_issue_retry_result = await self.make_action_with_id_for_multiparent_object_issues(
+                object_issue_retry_func = self.make_action_with_id_for_multiparent_object_issues if not object_ownership \
+                    else self.make_action_with_id_for_object_issues
+
+                object_issue_retry_result = await object_issue_retry_func(
                     object_issues_actions, retries, parallelisation, ignore_objects_error)
                 for i, res in enumerate(object_issue_retry_result):
                     action_id = res['action_id']
@@ -351,7 +355,7 @@ class BaseOrchestrator:
 
         return results
 
-    async def make_action(self, actions, retries=3, parallelisation=2):
+    async def make_action(self, actions, retries=3, parallelisation=2, object_ownership=True):
         action_ids = self.db_collection.insert_many([{
             'action_name': action['name'],
             'action_params': action['body'],
@@ -360,7 +364,7 @@ class BaseOrchestrator:
             'activation_ids': []
         } for action in actions]).inserted_ids
 
-        results = await self.make_action_with_id(action_ids, retries, parallelisation)
+        results = await self.make_action_with_id(action_ids, retries, parallelisation, object_ownership=object_ownership)
         return results
 
 

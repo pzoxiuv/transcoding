@@ -59,7 +59,7 @@ async def main():
         if not res['success']:
             raise Exception('Some transcoding Unsuccessful')
 
-    # store.remove_object({}, TRANSCODED_CHUNKS_NAME, chunks[0])
+    store.remove_object({}, TRANSCODED_CHUNKS_NAME, chunks[0])
 
     print("** Combining **")
     params = {
@@ -67,7 +67,7 @@ async def main():
         "input": chunks
     }
     combine_action = orch.prepare_action(action_name, params)
-    combine_results = (await orch.make_action([combine_action]))[0]
+    combine_results = (await orch.make_action([combine_action], object_ownership=False))[0]
     if not combine_results['success']:
         raise Exception('Error combining transcoded chunks')
 
