@@ -12,8 +12,14 @@ from object_store import store
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 client = MongoClient('172.24.20.28', 27017)
 
-# if a key gives error again, just do not retry
-# multiple actions that put into object. - two different functions store.py and orchestrator.py
+# print
+# lifetime - most recent get and put -infinite
+# number of actions [{action_id, retries}]
+# total number of objects accessed
+# total size of object transfer (get and put
+# for each action time to run.
+
+# emulate
 
 
 def get_logger(name):
