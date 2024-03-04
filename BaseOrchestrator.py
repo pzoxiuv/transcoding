@@ -14,11 +14,6 @@ client = MongoClient('172.24.20.28', 27017)
 
 # print
 # lifetime - most recent get and put -infinite
-# number of actions [{action_id, retries}]
-# total number of objects accessed
-# total size of object transfer (get and put
-# for each action time to run.
-
 # emulate
 
 
@@ -384,13 +379,43 @@ class BaseOrchestrator:
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
         action_object_metrics = self.store.get_metrics_for_actions(action_ids)
-
-        for info in actions_info:
+        print("** Metrics **")
+        print("=============")
+        print()
+        print("** Action Metrics **")
+        print("--------------------")
+        print(f"Number of actions: {len(action_ids)}")
+        for i, info in enumerate(actions_info):
             action_id = info['_id']
-            print(info)
-            print(action_object_metrics['metrics'][action_id])
+            print()
+            print(f"Action {i+1}:")
+            print(f"Name - {info['action_name']}")
+            print(f"Body - {str(info['action_params'])}")
+            attempts = info['attempts']
+            print(f"Number of attempts - {len(attempts)}")
+            if len(attempts) == 1:
+                print(f"Time taken - {attempts[0]['time']}")
+            else:
+                for i, attempt in enumerate(attempts):
+                    print(f"Attempt {(i+1)} - Time Taken: {attempt['time']}")
+            print("Data read: {}".format(
+                action_object_metrics['metrics'][action_id]['object_read_sz']))
+            print("Data written: {}".format(
+                action_object_metrics['metrics'][action_id]['object_write_sz']))
+        print()
+        print("** Object Metrics **")
+        print("--------------------")
+        print(
+            f"Total number of objects read: {len(action_object_metrics['objects_read'])}")
+        print(
+            f"Total size of objects read: {action_object_metrics['total_object_read_sz']}")
+        print(
+            f"Total number of objects written: {len(action_object_metrics['objects_written'])}")
+        print(
+            f"Total size of objects written: {action_object_metrics['total_object_write_sz']}")
+        # print(action_object_metrics['metrics'][action_id])
 
-        print(action_object_metrics['objects_used'])
+        # print(action_object_metrics['objects_used'])
 
 
 async def main():

@@ -141,17 +141,23 @@ class ObjectStore:
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
         action_metrics = dict()
-        objects_used = set()
+        objects_read = set()
+        objects_written = set()
+        total_object_read_sz = 0
+        total_object_write_sz = 0
 
         for info in actions_info:
             object_read_sz = 0
             object_write_sz = 0
             for object_read in info['objects_get']:
-                objects_used.add(object_read['object'])
+                objects_read.add(object_read['object'])
                 object_read_sz += object_read['size']
             for object_wrote in info['objects_put']:
-                objects_used.add(object_wrote['object'])
+                objects_written.add(object_wrote['object'])
                 object_write_sz += object_wrote['size']
+            total_object_read_sz += object_read_sz
+            total_object_write_sz += object_write_sz
+
             action_metrics[info['_id']] = {
                 'action_id': info['_id'],
                 'object_read_sz': object_read_sz,
@@ -159,8 +165,11 @@ class ObjectStore:
             }
 
         return {
-            'objects_used': objects_used,
-            'metrics': action_metrics
+            'objects_read': objects_read,
+            'objects_written': objects_written,
+            'metrics': action_metrics,
+            'total_object_read_sz': total_object_read_sz,
+            'total_object_write_sz': total_object_write_sz,
         }
 
 
