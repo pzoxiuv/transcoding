@@ -12,9 +12,8 @@ from object_store import store
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 client = MongoClient('172.24.20.28', 27017)
 
-# print
-# lifetime - most recent get and put -infinite
 # emulate
+# add orch id?
 
 
 def get_logger(name):
@@ -379,7 +378,7 @@ class BaseOrchestrator:
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
         action_object_metrics = self.store.get_metrics_for_actions(action_ids)
-        print("** Metrics **")
+        print("\n** Metrics **")
         print("=============")
         print()
         print("** Action Metrics **")
@@ -413,8 +412,20 @@ class BaseOrchestrator:
             f"Total number of objects written: {len(action_object_metrics['objects_written'])}")
         print(
             f"Total size of objects written: {action_object_metrics['total_object_write_sz']}")
-        # print(action_object_metrics['metrics'][action_id])
 
+        object_metrics = self.store.get_metrics_for_objects(
+            action_object_metrics['objects_read'].union(action_object_metrics['objects_written']))
+        object_metrics = sorted(
+            object_metrics, key=lambda x: x['put_time'] or x['get_time'])
+        for object in object_metrics:
+            print()
+            print(f"Object name: {object['object']}")
+            if object['lifetime']:
+                print(f"Lifetime: {object['lifetime']}")
+            elif object['get_time']:
+                print(f"Last Get: {object['get_time']}")
+            elif object['put_time']:
+                print(f"First Put: {object['put_time']}")
         # print(action_object_metrics['objects_used'])
 
 

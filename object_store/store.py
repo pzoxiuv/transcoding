@@ -172,6 +172,42 @@ class ObjectStore:
             'total_object_write_sz': total_object_write_sz,
         }
 
+    def get_metrics_for_objects(self, objects):
+        result = []
+        for object in objects:
+            objects_put_info = self.db_collection.find(
+                {"objects_put.object": object})
+            put_time = None
+            for info in objects_put_info:
+                for obj in info['objects_put']:
+                    if not obj['object'] == object:
+                        continue
+                    if not put_time or put_time > obj['time']:
+                        put_time = obj['time']
+
+            objects_get_info = self.db_collection.find(
+                {"objects_get.object": object})
+            get_time = None
+            for info in objects_get_info:
+                for obj in info['objects_get']:
+                    if not obj['object'] == object:
+                        continue
+                    if not get_time or get_time < obj['time']:
+                        get_time = obj['time']
+
+            lifetime = None
+            if get_time and put_time:
+                lifetime = get_time - put_time
+
+            result.append({
+                'object': object,
+                'put_time': put_time,
+                'get_time': get_time,
+                'lifetime': lifetime
+            })
+
+        return result
+
 
 class NoSuchKeyException(Exception):
     def __init__(self, e):
