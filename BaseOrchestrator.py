@@ -381,7 +381,7 @@ class BaseOrchestrator:
         action_ids = list(self.actions_ids)
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
-        action_object_metrics = self.store.get_metrics_for_actions(action_ids)
+        action_object_metrics = self.store.get_metrics_for_actions(self.orch_id, action_ids)
         print("\n** Metrics **")
         print("=============")
         print()
@@ -394,7 +394,8 @@ class BaseOrchestrator:
             print(f"Action {i+1}:")
             print(f"Name - {info['action_name']}")
             print(f"Body - {str(info['action_params'])}")
-            attempts = info['attempts']
+            attempts = list(
+                filter(lambda attempt: attempt['orch_id'] == self.orch_id, info['attempts']))
             print(f"Number of attempts - {len(attempts)}")
             if len(attempts) == 1:
                 print(f"Time taken - {attempts[0]['time']}")
@@ -418,7 +419,7 @@ class BaseOrchestrator:
             f"Total size of objects written: {action_object_metrics['total_object_write_sz']}")
 
         object_metrics = self.store.get_metrics_for_objects(
-            action_object_metrics['objects_read'].union(action_object_metrics['objects_written']))
+            self.orch_id, action_object_metrics['objects_read'].union(action_object_metrics['objects_written']))
         object_metrics = sorted(
             object_metrics, key=lambda x: x['put_time'] or x['get_time'])
         for object in object_metrics:

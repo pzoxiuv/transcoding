@@ -146,7 +146,7 @@ class ObjectStore:
 
         return objects
 
-    def get_metrics_for_actions(self, action_ids):
+    def get_metrics_for_actions(self, orch_id, action_ids):
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
         action_metrics = dict()
@@ -161,10 +161,14 @@ class ObjectStore:
 
             if 'objects_get' in info:
                 for object_read in info['objects_get']:
+                    if not object_read['orch_id'] == orch_id:
+                        continue
                     objects_read.add(object_read['object'])
                     object_read_sz += object_read['size']
             if 'objects_put' in info:
                 for object_wrote in info['objects_put']:
+                    if not object_wrote['orch_id'] == orch_id:
+                        continue
                     objects_written.add(object_wrote['object'])
                     object_write_sz += object_wrote['size']
 
@@ -185,7 +189,7 @@ class ObjectStore:
             'total_object_write_sz': total_object_write_sz,
         }
 
-    def get_metrics_for_objects(self, objects):
+    def get_metrics_for_objects(self, orch_id, objects):
         result = []
         for object in objects:
             objects_put_info = self.db_collection.find(
@@ -195,6 +199,8 @@ class ObjectStore:
                 if not 'objects_put' in info:
                     continue
                 for obj in info['objects_put']:
+                    if not obj['orch_id'] == orch_id:
+                        continue
                     if not obj['object'] == object:
                         continue
                     if not put_time or put_time > obj['time']:
@@ -207,6 +213,8 @@ class ObjectStore:
                 if not 'objects_get' in info:
                     continue
                 for obj in info['objects_get']:
+                    if not obj['orch_id'] == orch_id:
+                        continue
                     if not obj['object'] == object:
                         continue
                     if not get_time or get_time < obj['time']:
