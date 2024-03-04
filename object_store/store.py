@@ -44,10 +44,12 @@ class ObjectStore:
 
     def __mark_object(self, context, object_path, object_size, method):
         action_id = ObjectId(context['action_id'])
+        orch_id = ObjectId(context['orch_id'])
         update_changes = {
             '$set': {**context},
             '$push': {
                 f"objects_{method}": {
+                    'orch_id': orch_id,
                     'object': object_path,
                     'size': object_size,
                     'time': datetime.utcnow()
@@ -62,9 +64,16 @@ class ObjectStore:
 
     def __mark_error_get(self, context, object_path):
         action_id = ObjectId(context['action_id'])
+        orch_id = ObjectId(context['orch_id'])
         update_changes = {
             '$set': {**context},
-            '$push': {'error_get': {'object': object_path, 'time': datetime.utcnow()}}
+            '$push': {
+                'error_get': {
+                    'orch_id': orch_id,
+                    'object': object_path,
+                    'time': datetime.utcnow()
+                }
+            }
         }
         self.db_collection.update_one(
             {'_id': action_id},

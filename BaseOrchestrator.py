@@ -35,6 +35,9 @@ class BaseOrchestrator:
         self.url = "https://localhost:31001/api/v1/namespaces"
         self.logger = get_logger('transcoder')
         self.store = store.ObjectStore()
+        self.orch_id = client['openwhisk']['orchestrations'].insert_one({
+            'creation_ts': datetime.now(),
+        }).inserted_id
         self.actions_ids = set()
         self.db_collection: collection.Collection = client['openwhisk']['actions']
 
@@ -47,7 +50,7 @@ class BaseOrchestrator:
 
     def __post_call(self, api_url, action_id, params):
         headers = {"Content-Type": "application/json"}
-        context = {"action_id": str(action_id)}
+        context = {"action_id": str(action_id), "orch_id": str(self.orch_id)}
         self.actions_ids.add(action_id)
         response = requests.post(
             api_url, headers=headers, auth=self.auth, verify=False, json={**params, "context": context})
@@ -90,7 +93,7 @@ class BaseOrchestrator:
                 print(result)
                 time_taken = datetime.now() - self.start_times[activation_id]
                 update_changes = {
-                    '$push': {'attempts': {'start': self.start_times[activation_id], 'end': datetime.now(), 'time': time_taken.total_seconds()}}
+                    '$push': {'attempts': {'start': self.start_times[activation_id], 'end': datetime.now(), 'time': time_taken.total_seconds(), 'orch_id': self.orch_id}}
                 }
                 self.db_collection.update_one(
                     {'_id': action_id}, update_changes)
@@ -363,6 +366,7 @@ class BaseOrchestrator:
 
     async def make_action(self, actions, retries=3, parallelisation=2, object_ownership=True):
         action_ids = self.db_collection.insert_many([{
+            'orch_id': self.orch_id,
             'action_name': action['name'],
             'action_params': action['body'],
             'creation_ts': datetime.now(),
