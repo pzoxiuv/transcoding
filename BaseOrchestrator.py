@@ -315,9 +315,9 @@ class BaseOrchestrator:
                 object_issue_retry_result = await object_issue_retry_func(
                     object_issues_actions, retries, parallelisation, ignore_objects_error)
                 for i, res in enumerate(object_issue_retry_result):
-                    action_id = res['action_id']
                     if not res:  # if issue from parent, does nothing
                         continue
+                    action_id = res['action_id']
                     if not res['success']:
                         action_result = {
                             'error': res['error'],

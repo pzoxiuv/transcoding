@@ -149,12 +149,16 @@ class ObjectStore:
         for info in actions_info:
             object_read_sz = 0
             object_write_sz = 0
-            for object_read in info['objects_get']:
-                objects_read.add(object_read['object'])
-                object_read_sz += object_read['size']
-            for object_wrote in info['objects_put']:
-                objects_written.add(object_wrote['object'])
-                object_write_sz += object_wrote['size']
+
+            if 'objects_get' in info:
+                for object_read in info['objects_get']:
+                    objects_read.add(object_read['object'])
+                    object_read_sz += object_read['size']
+            if 'objects_put' in info:
+                for object_wrote in info['objects_put']:
+                    objects_written.add(object_wrote['object'])
+                    object_write_sz += object_wrote['size']
+
             total_object_read_sz += object_read_sz
             total_object_write_sz += object_write_sz
 
@@ -179,6 +183,8 @@ class ObjectStore:
                 {"objects_put.object": object})
             put_time = None
             for info in objects_put_info:
+                if not 'objects_put' in info:
+                    continue
                 for obj in info['objects_put']:
                     if not obj['object'] == object:
                         continue
@@ -189,6 +195,8 @@ class ObjectStore:
                 {"objects_get.object": object})
             get_time = None
             for info in objects_get_info:
+                if not 'objects_get' in info:
+                    continue
                 for obj in info['objects_get']:
                     if not obj['object'] == object:
                         continue
