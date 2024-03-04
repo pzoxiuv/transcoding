@@ -41,6 +41,7 @@ class BaseOrchestrator:
         self.url = "https://localhost:31001/api/v1/namespaces"
         self.logger = get_logger('transcoder')
         self.store = store.ObjectStore()
+        self.actions_ids = set()
         self.db_collection: collection.Collection = client['openwhisk']['actions']
 
     def __extract_activation_ids(self, act_dict):
@@ -53,6 +54,7 @@ class BaseOrchestrator:
     def __post_call(self, api_url, action_id, params):
         headers = {"Content-Type": "application/json"}
         context = {"action_id": str(action_id)}
+        self.actions_ids.add(action_id)
         response = requests.post(
             api_url, headers=headers, auth=self.auth, verify=False, json={**params, "context": context})
 
@@ -93,6 +95,11 @@ class BaseOrchestrator:
                 result = responseData.get('response').get('result')
                 print(result)
                 time_taken = datetime.now() - self.start_times[activation_id]
+                update_changes = {
+                    '$push': {'attempts': {'start': self.start_times[activation_id], 'end': datetime.now(), 'time': time_taken.total_seconds()}}
+                }
+                self.db_collection.update_one(
+                    {'_id': action_id}, update_changes)
                 if result.get('error', None) is not None:
                     self.logger.info(
                         "[{}] Poll completed with error for: {} in: {}".format(action_id, activation_id, time_taken))
@@ -148,7 +155,6 @@ class BaseOrchestrator:
             attempt_ts = datetime.now()
             update_changes = {
                 '$set': {'last_attempt_ts': attempt_ts},
-                '$inc': {'num_attempts': 1},
                 '$push': {'activation_ids': activation_id}
             }
             self.db_collection.update_one(
@@ -284,7 +290,7 @@ class BaseOrchestrator:
                     })
                     results[original_index] = res
                     # if no such key need to retry in a different way by adding it to object_issues list
-                    if error.get('code', 500) == 'NoSuchKey' and 'key' in error.get('meta', {}) and error['meta']['key'] not in ignore_objects_error:
+                    if isinstance(error, dict) and error.get('code', 500) == 'NoSuchKey' and 'key' in error.get('meta', {}) and error['meta']['key'] not in ignore_objects_error:
                         # ignore the error for the next time
                         ignore_objects_error.append(error['meta']['key'])
                         object_issues.append(
@@ -372,6 +378,19 @@ class BaseOrchestrator:
 
         results = await self.make_action_with_id(action_ids, retries, parallelisation, object_ownership=object_ownership)
         return results
+
+    def generate_metrics(self):
+        action_ids = list(self.actions_ids)
+        actions_info = list(self.db_collection.find(
+            {'_id': {'$in': action_ids}}))
+        action_object_metrics = self.store.get_metrics_for_actions(action_ids)
+
+        for info in actions_info:
+            action_id = info['_id']
+            print(info)
+            print(action_object_metrics['metrics'][action_id])
+
+        print(action_object_metrics['objects_used'])
 
 
 async def main():

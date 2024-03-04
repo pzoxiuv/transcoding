@@ -42,11 +42,17 @@ class ObjectStore:
         except Exception as e:
             print('Some issue with minio client: ' + e)
 
-    def __mark_object(self, context, object_path, method):
+    def __mark_object(self, context, object_path, object_size, method):
         action_id = ObjectId(context['action_id'])
         update_changes = {
             '$set': {**context},
-            '$push': {f"objects_{method}": {'object': object_path, 'time': datetime.utcnow()}}
+            '$push': {
+                f"objects_{method}": {
+                    'object': object_path,
+                    'size': object_size,
+                    'time': datetime.utcnow()
+                }
+            }
         }
         self.db_collection.update_one(
             {'_id': action_id},
@@ -76,16 +82,17 @@ class ObjectStore:
         if not self.client:
             return
         object_path = f"{bucket}/{file_name}"
-        self.__mark_object(context, object_path, 'put')
         self.client.fput_object(bucket, file_name, object_path)
+        self.__mark_object(context, object_path,
+                           os.path.getsize(object_path), 'put')
 
     def get_sync(self, context, bucket, file_name):
         if not self.client:
             return
         object_path = f"{bucket}/{file_name}"
         try:
-            self.client.fget_object(bucket, file_name, object_path)
-            self.__mark_object(context, object_path, 'get')
+            object = self.client.fget_object(bucket, file_name, object_path)
+            self.__mark_object(context, object_path, object.size, 'get')
         except Exception as e:
             self.__mark_error_get(context, object_path)
             if e.code == 'NoSuchKey':
@@ -130,6 +137,32 @@ class ObjectStore:
 
         return objects
 
+    def get_metrics_for_actions(self, action_ids):
+        actions_info = list(self.db_collection.find(
+            {'_id': {'$in': action_ids}}))
+        action_metrics = dict()
+        objects_used = set()
+
+        for info in actions_info:
+            object_read_sz = 0
+            object_write_sz = 0
+            for object_read in info['objects_get']:
+                objects_used.add(object_read['object'])
+                object_read_sz += object_read['size']
+            for object_wrote in info['objects_put']:
+                objects_used.add(object_wrote['object'])
+                object_write_sz += object_wrote['size']
+            action_metrics[info['_id']] = {
+                'action_id': info['_id'],
+                'object_read_sz': object_read_sz,
+                'object_write_sz': object_write_sz
+            }
+
+        return {
+            'objects_used': objects_used,
+            'metrics': action_metrics
+        }
+
 
 class NoSuchKeyException(Exception):
     def __init__(self, e):
@@ -156,8 +189,8 @@ if __name__ == '__main__':
     store = ObjectStore(config, [
         CHUNKS_BUCKET_NAME, TRANSCODED_CHUNKS_NAME, PROCESSED_VIDEO_BUCKET, INPUT_VIDEO_BUCKET])
 
-    # store.get_sync({'action_id': '65bf234830192e6d4546c8fa'},
-    #                PROCESSED_VIDEO_BUCKET, 'output_1707025224.mp4')
+    store.get_sync({'action_id': '65da8be53a71e3870d6ee0ec'},
+                   CHUNKS_BUCKET_NAME, 'chunk_4_1708821475.mp4')
 
     # store.get_sync({'action_id': '65bf234830192e6d4546c8fa'},
     #    INPUT_VIDEO_BUCKET, 'output_1707025224.mp4')
