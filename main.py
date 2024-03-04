@@ -185,8 +185,19 @@ def main(args):
     except Exception as e:
         return {
             "error": {
-                'code': e.code,
+                'code': getattr(e, 'code', None),
                 "message": str(e),
-                'meta': e.meta
+                'meta': getattr(e, 'meta', None)
             }
         }
+
+
+if __name__ == '__main__':
+    main({
+        "type": "chunk",
+        "context": {
+            "action_id": "65e518adf0fbb0970bb93fd0"
+        },
+        "num_chunks": '2',
+        "input": "facebook.mp4"
+    })
