@@ -8,9 +8,11 @@ from bson import ObjectId
 from pymongo import MongoClient, collection, UpdateOne
 
 from object_store import store
+from constants import MONGO_HOST, MONGO_PORT
+
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-client = MongoClient('172.24.20.28', 27017)
+client = MongoClient(MONGO_HOST, MONGO_PORT)
 
 # emulate
 # add orch id?
@@ -34,7 +36,8 @@ class BaseOrchestrator:
         self.auth = auth
         self.url = "https://localhost:31001/api/v1/namespaces"
         self.logger = get_logger('transcoder')
-        self.store = store.ObjectStore()
+        self.store = store.ObjectStore(
+            db_config={'MONGO_HOST': MONGO_HOST, 'MONGO_PORT': MONGO_PORT})
         self.orch_id = client['openwhisk']['orchestrations'].insert_one({
             'creation_ts': datetime.now(),
         }).inserted_id
@@ -381,7 +384,8 @@ class BaseOrchestrator:
         action_ids = list(self.actions_ids)
         actions_info = list(self.db_collection.find(
             {'_id': {'$in': action_ids}}))
-        action_object_metrics = self.store.get_metrics_for_actions(self.orch_id, action_ids)
+        action_object_metrics = self.store.get_metrics_for_actions(
+            self.orch_id, action_ids)
         print("\n** Metrics **")
         print("=============")
         print()

@@ -1,11 +1,12 @@
+from object_store import store
 import ffmpeg
 
 from enum import Enum
 from datetime import datetime
-from object_store import store
+from constants import MONGO_HOST, MONGO_PORT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, MINIO_ENDPOINT
 
-config = dict(STORAGE_ENDPOINT="172.24.20.28:9000",
-              AWS_ACCESS_KEY_ID="minioadmin", AWS_SECRET_ACCESS_KEY="minioadmin")
+config = dict(STORAGE_ENDPOINT=MINIO_ENDPOINT,
+              AWS_ACCESS_KEY_ID=AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY)
 
 CHUNKS_BUCKET_NAME = 'output-chunks'
 TRANSCODED_CHUNKS_NAME = 'transcoded-chunks'
@@ -13,8 +14,12 @@ PROCESSED_VIDEO_BUCKET = 'processed-video'
 INPUT_VIDEO_BUCKET = 'input-video'
 
 
-store = store.ObjectStore(config, [
-    CHUNKS_BUCKET_NAME, TRANSCODED_CHUNKS_NAME, PROCESSED_VIDEO_BUCKET, INPUT_VIDEO_BUCKET])
+store = store.ObjectStore(config,
+                          [CHUNKS_BUCKET_NAME, TRANSCODED_CHUNKS_NAME,
+                              PROCESSED_VIDEO_BUCKET, INPUT_VIDEO_BUCKET],
+                          db_config={'MONGO_HOST': MONGO_HOST,
+                                     'MONGO_PORT': MONGO_PORT}
+                          )
 
 
 def get_epoch():

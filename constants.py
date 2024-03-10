@@ -1,0 +1,10 @@
+MONGO_HOST = "172.24.20.28"
+MONGO_PORT = 27017
+MINIO_HOST = "172.24.20.28"
+MINIO_PORT = '9000'
+MINIO_ENDPOINT = f'{MINIO_HOST}:{MINIO_PORT}'
+AWS_ACCESS_KEY_ID = "minioadmin"
+AWS_SECRET_ACCESS_KEY = "minioadmin"
+
+if __name__ == '__main__':
+    print(MINIO_ENDPOINT)

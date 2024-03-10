@@ -1,14 +1,18 @@
 import asyncio
 from object_store import store
 from BaseOrchestrator import BaseOrchestrator
+from constants import MINIO_ENDPOINT, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY
 
 
 auth = ("23bc46b1-71f6-4ed5-8c54-816aa4f8c502",
         "123zO3xZCLrMN6v2BKK1dXYFpXlPkccOFqm12CdAsMgRU4VrNZ9lyGVCGuMDGIwP")
 orch = BaseOrchestrator(auth)
 
-config = dict(STORAGE_ENDPOINT="172.24.20.28:9000",
-              AWS_ACCESS_KEY_ID="minioadmin", AWS_SECRET_ACCESS_KEY="minioadmin")
+config = dict(
+    STORAGE_ENDPOINT=MINIO_ENDPOINT,
+    AWS_ACCESS_KEY_ID=AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY
+)
 
 CHUNKS_BUCKET_NAME = 'output-chunks'
 TRANSCODED_CHUNKS_NAME = 'transcoded-chunks'

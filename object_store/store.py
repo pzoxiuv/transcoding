@@ -5,7 +5,22 @@ from bson import ObjectId
 
 from datetime import datetime
 
-client = MongoClient('172.24.20.28', 27017)
+client = None
+
+
+def get_mongo_client(config):
+    global client
+
+    if client is not None:
+        return client
+
+    MONGO_HOST = config.get('MONGO_HOST')
+    MONGO_PORT = config.get('MONGO_PORT')
+
+    print('Using Mongo host: {}'.format(MONGO_HOST))
+
+    client = MongoClient(MONGO_HOST, MONGO_PORT)
+    return client
 
 
 class ObjectStore:
@@ -14,11 +29,12 @@ class ObjectStore:
     access_key = None
     secret_key = None
 
-    def __init__(self, config={}, buckets=[]):
+    def __init__(self, config={}, buckets=[], db_config={}):
         self.endpoint = config.get("STORAGE_ENDPOINT")
         self.access_key = config.get("AWS_ACCESS_KEY_ID")
         self.secret_key = config.get("AWS_SECRET_ACCESS_KEY")
-        self.db_collection: collection.Collection = client['openwhisk']['action_store']
+        self.db_collection: collection.Collection = get_mongo_client(db_config)[
+            'openwhisk']['action_store']
 
         if not self.endpoint:
             return
@@ -248,8 +264,15 @@ class NoSuchKeyException(Exception):
 
 
 if __name__ == '__main__':
-    config = dict(STORAGE_ENDPOINT="172.24.20.28:9000",
-                  AWS_ACCESS_KEY_ID="minioadmin", AWS_SECRET_ACCESS_KEY="minioadmin")
+    STORAGE_ENDPOINT = "172.24.20.28:9000"
+    AWS_ACCESS_KEY_ID = "minioadmin"
+    AWS_SECRET_ACCESS_KEY = "minioadmin"
+
+    config = dict(
+        STORAGE_ENDPOINT=STORAGE_ENDPOINT,
+        AWS_ACCESS_KEY_ID=AWS_ACCESS_KEY_ID,
+        AWS_SECRET_ACCESS_KEY=AWS_SECRET_ACCESS_KEY
+    )
 
     CHUNKS_BUCKET_NAME = 'output-chunks'
     TRANSCODED_CHUNKS_NAME = 'transcoded-chunks'
