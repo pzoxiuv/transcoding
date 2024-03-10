@@ -36,6 +36,9 @@ async def main():
         "num_chunks": num_chunks,
         "input": "facebook.mp4"
     }
+
+    orch.start()
+
     split_action = orch.prepare_action(action_name, params)
     split_results = (await orch.make_action([split_action]))[0]
     if not split_results['success']:
@@ -78,6 +81,8 @@ async def main():
     print("** Done **")
     print("Output available at: {}".format(
         combine_results['result']['output_file']))
+
+    orch.stop()
 
 
 if __name__ == "__main__":
