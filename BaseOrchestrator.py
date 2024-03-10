@@ -14,9 +14,6 @@ from constants import MONGO_HOST, MONGO_PORT
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 client = MongoClient(MONGO_HOST, MONGO_PORT)
 
-# emulate
-# add orch id?
-
 
 def get_logger(name):
     logger = logging.getLogger(name)

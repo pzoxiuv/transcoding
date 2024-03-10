@@ -13,6 +13,7 @@ mv action.zip ../
 
 # Clean up the temporary directory
 cd ..
+rm action.zip
 rm -rf deployment
 
 wsk action create transcoder action.zip --docker docker.io/prajjawal05/transcoder:latest --insecure
